@@ -259,6 +259,7 @@
         <button class="small" onclick="undoTurn()" title="撤销本回合的操作，回到回合开始（自动存档，刷新/关页不丢局）">↶ 悔棋</button>
         <button class="small" onclick="showHelp()">规则/说明</button>
         <button class="small" id="sfxBtn" onclick="SFX.toggle()" title="开关音效（发射/着陆/扫描/扇区/外星发现/里程碑等）">🔊 音效</button>
+        <button class="small" onclick="exportReplay()" title="把本局完整日志导出为文本文件（复盘/分享）">📥 复盘</button>
         <button class="small" onclick="startScreen()">重开</button>
       </div>
     </div>
@@ -344,6 +345,9 @@ const PLANETS={
   saturn: {name:'土星',en:'Saturn',short:'土',orbit:{data:2,card:1},land:{trace:'land',vp:5,data:1},moons:['土卫二','土卫六']},
   uranus: {name:'天王星',en:'Uranus',short:'天',orbit:{publicity:1,data:1,vp:1},land:{trace:'land',vp:6,data:1},moons:[]},
   neptune:{name:'海王星',en:'Neptune',short:'海',orbit:{data:2,publicity:1},land:{trace:'land',vp:6,data:2},moons:['海卫一']},
+  // 冥王星促销卡（Pluto promo）：不在棋盘上、是每位玩家面前的一张卡。只要你有探测器在最外环(ring2)即可环绕/着陆冥王星。
+  // 每人各有 1 个环绕位 + 1 个着陆位；环绕=1信用+1能量，着陆=3能量(已有环绕则2，可被橙色科技再-1)。奖励为合理近似（促销卡原文未给数值）。
+  pluto:  {name:'冥王星',en:'Pluto',short:'冥',orbit:{data:2,vp:2},land:{trace:'land',vp:7,data:2},moons:['冥卫一'],offboard:true},
 };
 // 三个圆盘环（disc）。每环 8 个格位；body 可旋转。
 // body: 行星键 / 'asteroid' / 'comet' / null
@@ -597,6 +601,72 @@ const SFX={
     if(this.on) this.play('click'); return this.on; }
 };
 
+/* ---------- 战绩统计（localStorage，跨对局持久） ---------- */
+// 记录人类玩家的胜负、按模式/对手细分、连胜、最佳分。仅记真实对局（教程/模拟不计）。
+const STATS_KEY='seti_stats_v1';
+function loadStats(){ try{ const r=localStorage.getItem(STATS_KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function freshStats(){ return {games:0,wins:0,draws:0,streak:0,bestStreak:0,bestVp:0,byMode:{classic:{g:0,w:0},org:{g:0,w:0}},byOpp:{heuristic:{g:0,w:0},neural:{g:0,w:0},rival:{g:0,w:0},alphazero:{g:0,w:0}}}; }
+function saveStats(s){ try{ localStorage.setItem(STATS_KEY, JSON.stringify(s)); }catch(e){} }
+function clearStats(){ try{ localStorage.removeItem(STATS_KEY); }catch(e){} if(typeof startScreen==='function') startScreen(); }
+function recordResult(youWin, isDraw, mode, oppMode, yourVp){
+  const s=loadStats()||freshStats();
+  s.games++;
+  if(isDraw){ s.draws++; s.streak=0; }
+  else if(youWin){ s.wins++; s.streak++; if(s.streak>s.bestStreak)s.bestStreak=s.streak; }
+  else { s.streak=0; }
+  if(youWin && yourVp>s.bestVp) s.bestVp=yourVp;
+  const mk = (mode==='org')?'org':'classic';
+  if(!s.byMode[mk]) s.byMode[mk]={g:0,w:0};
+  s.byMode[mk].g++; if(youWin) s.byMode[mk].w++;
+  if(oppMode && s.byOpp[oppMode]){ s.byOpp[oppMode].g++; if(youWin) s.byOpp[oppMode].w++; }
+  saveStats(s);
+  return s;
+}
+function statsSummaryHTML(){
+  const s=loadStats();
+  if(!s || !s.games){ return `<div class="small muted" style="margin-top:8px">📊 战绩：还没有完成的对局——赢一局就会记录在这里。</div>`; }
+  const rate = s.games? Math.round(s.wins/s.games*100):0;
+  const oppName={heuristic:'启发式',neural:'全局',rival:'Rival',alphazero:'AlphaZero'};
+  const oppBits=Object.keys(s.byOpp).filter(k=>s.byOpp[k].g>0).map(k=>`${oppName[k]} ${s.byOpp[k].w}/${s.byOpp[k].g}`).join(' · ');
+  const modeBits=['classic','org'].filter(k=>s.byMode[k]&&s.byMode[k].g>0).map(k=>`${k==='org'?'组织':'经典'} ${s.byMode[k].w}/${s.byMode[k].g}`).join(' · ');
+  return `<div style="margin-top:10px;background:#0b1428;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:11.5px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b style="color:var(--gold)">📊 战绩</b>
+      <span class="link small muted" style="cursor:pointer" onclick="if(confirm('确定清空战绩记录？'))clearStats()">清空</span>
+    </div>
+    <div style="margin-top:4px"><b style="font-size:14px;color:${rate>=50?'var(--good)':'var(--muted)'}">${s.wins}胜 ${s.games-s.wins-s.draws}负${s.draws?' '+s.draws+'平':''}</b>
+      <span class="muted"> · 胜率 ${rate}%</span>${s.streak>1?` · 🔥 ${s.streak}连胜`:''}${s.bestStreak>1?` <span class="muted">(最佳 ${s.bestStreak})</span>`:''}</div>
+    ${modeBits?`<div class="muted" style="margin-top:2px">按模式：${modeBits}</div>`:''}
+    ${oppBits?`<div class="muted" style="margin-top:2px">按对手：${oppBits}</div>`:''}
+    ${s.bestVp?`<div class="muted" style="margin-top:2px">最高胜局得分：${s.bestVp}</div>`:''}
+  </div>`;
+}
+
+/* ---------- 导出对局复盘（下载完整日志为文本文件） ---------- */
+function exportReplay(){
+  if(typeof G==='undefined' || !G || !G._replay){ if(typeof toast==='function')toast('当前没有可导出的对局。'); return; }
+  const lines=[];
+  lines.push('SETI 搜寻地外文明 — 对局复盘');
+  lines.push('模式：'+(G.mode==='org'?'组织模式':'经典模式')+(G.pluto?'（含扩展/冥王星）':'')+' · '+G.players.length+' 人 · 共 '+G.maxRound+' 回合');
+  lines.push('玩家：'+G.players.map(p=>p.name+(p.org?'（'+p.org.name+'）':'')).join(' vs '));
+  if(G.over){ lines.push('最终比分：'+G.players.map(p=>p.name+' '+p.vp+'分').join(' / ')); }
+  else { lines.push('进度：第 '+G.round+'/'+G.maxRound+' 回合（未结束）'); }
+  lines.push('导出时间：'+new Date().toLocaleString());
+  lines.push('—'.repeat(28));
+  G._replay.forEach((t,i)=>lines.push((i+1)+'. '+t));
+  const text=lines.join('\r\n');
+  try{
+    const blob=new Blob([text],{type:'text/plain;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const ts=new Date(); const pad=n=>('0'+n).slice(-2);
+    a.href=url; a.download='SETI_复盘_'+ts.getFullYear()+pad(ts.getMonth()+1)+pad(ts.getDate())+'_'+pad(ts.getHours())+pad(ts.getMinutes())+'.txt';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); },100);
+    if(typeof toast==='function')toast('已导出本局复盘（'+G._replay.length+' 条记录）。');
+  }catch(e){ if(typeof toast==='function')toast('导出失败：'+e.message); }
+}
+
 /* ---------- 组织（来自 TTS「角色扩」mod 3711922105 的真实卡面） ---------- */
 // 每个组织：真实卡图 + 非对称起始资源 + 被动 passive + 每回合一次主动 active + 收入类型
 // 被动/主动为忠实"神韵"的简化实现；卡面展示完整原始能力。
@@ -766,6 +836,7 @@ function freshPlayer(name,isAI,color){
     pendingMoves:0,
     passed:false,
     org:null, orgUsed:false,   // 组织模式
+    pluto:null,                // 冥王星促销卡（扩展开启时 = {orb:false,land:false}）
     // 自由行动一次性标记
     tuckedThisAnalyze:false,
   };
@@ -847,7 +918,11 @@ function newGame(opts){
     log:[],
     over:false,
   };
+  G._replay=[];   // 完整对局日志（不截断；用于"导出复盘"）。_前缀→不进存档，仅当前会话
   SEL={probe:-1};
+  // 冥王星促销卡：扩展开启（组织模式 或 经典+扩展）时，每位玩家面前各放 1 张
+  G.pluto = orgMode || !!opts.expansion;
+  if(G.pluto){ players.forEach(p=>{ p.pluto={orb:false,land:false}; }); }
   // 扩展 Rival 长期目标：仅 1v1 且对手为官方Rival 时启用
   if(numP===2 && players[1].aiMode==='rival'){ setupLongTerm(); logS('【官方Rival·扩展】揭示 2 块长期目标板块；完成全部任务可移除，否则每回合对手据此前进。'); }
   logS('新游戏开始！'+(orgMode?'【组织模式】':'【经典模式】')+(numP>2?('【'+numP+'人局】'):'')+'起始玩家：'+pname(startPlayer)+'。共 '+G.maxRound+' 回合。');
@@ -1011,7 +1086,8 @@ function startScreen(){
    <button class="opt primary" style="margin:0" onclick="newGame(classicOpts())">🎮 经典模式（${_selNumP} 人 · 5 回合）${_selExpansion?'· 含扩展':''}</button>
    <button class="opt gold" style="margin:0" onclick="orgPickScreen()">🏢 组织模式（2 人 · 选择组织）</button>
    <button class="opt gold" style="margin:0" onclick="startStoryTutorial()">🎬 剧情教程（手把手通关一局，零基础必玩）</button>
-   <button class="opt" style="margin:0" onclick="startTutorial()">📖 界面速览（快速看一遍界面）</button></div>`;
+   <button class="opt" style="margin:0" onclick="startTutorial()">📖 界面速览（快速看一遍界面）</button></div>
+   ${statsSummaryHTML()}`;
   $('modalbg').style.display='flex';
 }
 function orgPickScreen(){
@@ -1066,9 +1142,9 @@ function youOrgActive(){
 }
 
 /* ---------- 日志 ---------- */
-function logS(t){G.log.unshift({c:'lg-sys',t});trimLog();}
-function logY(t){G.log.unshift({c:'lg-you',t});trimLog();}
-function logA(t){G.log.unshift({c:'lg-ai',t});trimLog();}
+function logS(t){G.log.unshift({c:'lg-sys',t});if(G._replay)G._replay.push('· '+t);trimLog();}
+function logY(t){G.log.unshift({c:'lg-you',t});if(G._replay)G._replay.push('[你] '+t);trimLog();}
+function logA(t){G.log.unshift({c:'lg-ai',t});if(G._replay)G._replay.push('[AI] '+t);trimLog();}
 function trimLog(){if(G.log.length>160)G.log.length=160;renderLog();}
 
 /* ===========================================================
@@ -1395,6 +1471,63 @@ function doLand(p,pi,b){
   alienToken(p,'land',{body:b});
   fireTrig(p,'land',b);
   SFX.play('land');
+}
+
+/* ===== 冥王星促销卡（Pluto promo）=====
+   规则：冥王星不在棋盘上。只要你有探测器在最外环(ring2)的任意格位，即可用【环绕】或【着陆】把那个探测器变成冥王星的环绕器/着陆器。
+   每人各 1 环绕位 + 1 着陆位；环绕=1信用+1能量；着陆=3能量（已有冥王星环绕器则 2），可被橙色着陆科技再 -1。
+   冥王星的环绕器/着陆器照常计入"轨道器/着陆器"数量 → 自动计入金板配对计分与"需要环绕器/着陆器"的任务。 */
+function plutoProbeIdx(p){ // 返回一个在最外环的探测器下标（没有则 -1）
+  for(let i=0;i<p.probes.length;i++){ if(p.probes[i].ring===2) return i; } return -1;
+}
+function plutoLandCost(p){ let c=(p.pluto&&p.pluto.orb)?2:3; if(p.techs.probe.includes('p_land'))c-=1; if(hasPassive(p,'landDiscount'))c-=1; return Math.max(1,c); }
+function canPlutoOrbit(p){ return G.pluto && p.pluto && !p.pluto.orb && plutoProbeIdx(p)>=0 && p.credits>=1 && p.energy>=1; }
+function canPlutoLand(p){ return G.pluto && p.pluto && !p.pluto.land && plutoProbeIdx(p)>=0 && p.energy>=plutoLandCost(p); }
+function doOrbitPluto(p,pi){
+  const pl=PLANETS.pluto;
+  p.probes.splice(pi,1);
+  p.orbiters++;
+  p.pluto.orb=true;
+  gain(p,pl.orbit,true);
+  if(hasAlien(p,'orbitvp')){ p.vp+=2; checkMilestonesLater(p); }
+  log3(p,'环绕冥王星（promo），获得奖励。');
+  alienToken(p,'orbit',{body:'pluto'});
+  SFX.play('orbit');
+}
+function doLandPluto(p,pi){
+  const pl=PLANETS.pluto;
+  p.probes.splice(pi,1);
+  p.landers++;
+  p.pluto.land=true;
+  gain(p,pl.land,true);
+  if(hasAlien(p,'land')){ gain(p,{data:1,vp:1},true); }
+  log3(p,'着陆冥王星（promo）。');
+  alienToken(p,'land',{body:'pluto'});
+  SFX.play('land');
+}
+function actOrbitPluto(){
+  if(!canAct())return;
+  const p=G.players[0];
+  if(!canPlutoOrbit(p)){ toast('需要：开启扩展、最外环有探测器、尚未环绕冥王星、1信用+1能量。'); return; }
+  let pi=(SEL.probe>=0&&p.probes[SEL.probe]&&p.probes[SEL.probe].ring===2)?SEL.probe:plutoProbeIdx(p);
+  p.credits-=1; p.energy-=1;
+  doOrbitPluto(p,pi); SEL.probe=-1; endMain();
+}
+function actLandPluto(){
+  if(!canAct())return;
+  const p=G.players[0];
+  if(!canPlutoLand(p)){ toast('需要：开启扩展、最外环有探测器、尚未着陆冥王星、'+plutoLandCost(p)+'能量。'); return; }
+  let pi=(SEL.probe>=0&&p.probes[SEL.probe]&&p.probes[SEL.probe].ring===2)?SEL.probe:plutoProbeIdx(p);
+  p.energy-=plutoLandCost(p);
+  doLandPluto(p,pi); SEL.probe=-1; endMain();
+}
+// AI 机会主义：有外环探测器且可负担时，把【着陆冥王星】(高分)或【环绕冥王星】作为主行动
+function aiPlutoAction(p){
+  if(!G.pluto || !p.pluto) return null;
+  const pi=plutoProbeIdx(p); if(pi<0) return null;
+  if(canPlutoLand(p)) return {a:'plutoLand',pi};
+  if(canPlutoOrbit(p)) return {a:'plutoOrbit',pi};
+  return null;
 }
 
 /* 扫描 */
@@ -2149,6 +2282,9 @@ function aiTurn(){
   if(p.passed){ nextPlayer(); return; }
   // 自由行动：放数据、塞收入、完成任务
   if(!G._tut) aiFreePhase(p);   // 剧情教程：AI 不进行自由行动（不囤资源，让新手能赢）
+  // 冥王星机会（扩展）：有外环探测器且可负担 → 优先把它变成冥王星着陆器/环绕器（作为本回合主行动）
+  const pa = G._tut ? null : aiPlutoAction(p);
+  if(pa){ aiExecute(p,pa); return; }
   // 选择主行动
   const action=aiChooseMain(p);
   aiExecute(p,action);
@@ -2597,6 +2733,8 @@ function aiExecute(p,action){
     case 'analyze': p.energy-=analyzeCost(p); doAnalyze(p); logA('AI 分析数据。'); after(); break;
     case 'land': p.energy-=landCost(p,action.b); doLand(p,action.pi,action.b); after(); break;
     case 'orbit': p.credits-=1;p.energy-=1; doOrbit(p,action.pi,action.b); after(); break;
+    case 'plutoOrbit': p.credits-=1;p.energy-=1; doOrbitPluto(p,action.pi); logA('AI 环绕冥王星。'); after(); break;
+    case 'plutoLand': p.energy-=plutoLandCost(p); doLandPluto(p,action.pi); logA('AI 着陆冥王星。'); after(); break;
     case 'scan': p.credits-=1;p.energy-=2; logA('AI 扫描天空。'); performScan(p,after); break;
     case 'research': p.publicity-=researchCost(p); rotateSolarSystem(); takeTech(p,aiPickTech(p,availTechs(p)).id); logA('AI 研究科技。'); after(); break;
     case 'card':{ const c=p.hand.splice(action.ci,1)[0]; p.credits-=c.cost; flyCardAnim(c.n); resolveCard(p,c); after(); break; }
@@ -3279,6 +3417,9 @@ function renderActions(){
     <button class="act${gl('analyze')}" data-act="analyze" ${dis||!computerTopFull(p)||p.energy<1?'disabled':''} ${lk('analyze')} onclick="actAnalyze()">💾 分析数据<br><span class="small muted">1能量</span></button>
     <button class="act${gl('card')}" data-act="card" ${dis||p.hand.length===0?'disabled':''} ${lk('card')} onclick="actPlayCardPrompt()">🃏 打出卡牌</button>
     <button class="act${gl('research')}" data-act="research" ${dis||p.publicity<6||availTechs(p).length===0?'disabled':''} ${lk('research')} onclick="actResearchPrompt()">🔬 研究科技<br><span class="small muted">6公关</span></button>
+    ${G.pluto?`
+    <button class="act" data-act="plutoOrbit" ${dis||!canPlutoOrbit(p)?'disabled':''} onclick="actOrbitPluto()" title="冥王星促销：最外环有探测器即可环绕（每人限1次）">🌑 环绕冥王星<br><span class="small muted">1信用+1能量${p.pluto&&p.pluto.orb?' ✓已环绕':''}</span></button>
+    <button class="act" data-act="plutoLand" ${dis||!canPlutoLand(p)?'disabled':''} onclick="actLandPluto()" title="冥王星促销：最外环有探测器即可着陆（每人限1次）">🌑 着陆冥王星<br><span class="small muted">${plutoLandCost(p)}能量${p.pluto&&p.pluto.land?' ✓已着陆':''}</span></button>`:''}
     <button class="act primary${gl('pass')}" data-act="pass" ${dis?'disabled':''} ${lk('pass')} onclick="actPass()">⏭ 跳过(结束回合)</button>
     <button class="small" data-free="placeData" ${dis||p.data<=0?'disabled':''} ${lk('placeData')} onclick="placeDataFree()">放置数据(自由)</button>
     <button class="small" ${dis?'disabled':''} ${lk('exchange')} onclick="exchangePrompt()">兑换(自由)</button>
@@ -3307,7 +3448,7 @@ function renderPlayers(){
       <div class="row" id="oppRes${i}"></div>
       <div class="row" style="margin-top:6px">
         <span class="tag">轨道器 ${ai.orbiters}</span><span class="tag">着陆器 ${ai.landers}</span>
-        <span class="tag">扇区胜利 ${ai.sectorWins}</span><span class="tag">科技 ${tech}</span>
+        <span class="tag">扇区胜利 ${ai.sectorWins}</span><span class="tag">科技 ${tech}</span>${(G.pluto&&ai.pluto&&(ai.pluto.orb||ai.pluto.land))?`<span class="tag" style="border-color:#b58cff66">🌑${ai.pluto.orb?'环':''}${ai.pluto.land?'陆':''}</span>`:''}
       </div>
       <div class="small muted" style="margin-top:4px">${ai.org?'<b style="color:'+col+'">🏢 '+ai.org.name+'</b>（<span class="link" onclick="showOrgZoom('+i+')">查看</span>） · ':''}痕迹 登${ai.traces.land}/胜${ai.traces.win}/析${ai.traces.analyze} · 太空探测器${ai.probes.length}</div>
     </div>`;
@@ -3403,6 +3544,14 @@ function showFinal(){
   const winners=ps.filter(p=>p.vp===maxVp);
   const youWin=winners.indexOf(ps[0])>=0;
   SFX.play(youWin?'win':'lose');
+  // 战绩记录：仅真实对局、每局一次（教程/剧情不计）
+  if(!G._recorded && !G._tut && !_storyTut){
+    G._recorded=true;
+    const oppMode = (ps.length===2 && ps[1].isAI) ? ps[1].aiMode : null;
+    const isDraw = youWin && winners.length>1;        // 你与他人并列第一 = 平局
+    const cleanWin = youWin && winners.length===1;     // 独占第一 = 胜
+    recordResult(cleanWin, isDraw, G.mode, oppMode, ps[0].vp);
+  }
   const title= winners.length>1?'平局！':(youWin?'🎉 你获胜！':pname(winners[0].idx)+' 获胜，再接再厉！');
   const anyDanger=ps.some(p=>p.finalDanger);
   const colH=ps.map(p=>`<th style="color:${pcolor(p.idx)}">${pname(p.idx)}</th>`).join('');
@@ -3431,7 +3580,7 @@ function showFinal(){
      ${row('完成任务',p=>p.completedMissions)}
      <tr><th>总分</th>${ps.map(p=>`<th style="font-size:18px;color:var(--gold)">${p.vp}</th>`).join('')}</tr>
    </table>
-   <div style="margin-top:12px"><button class="primary opt" onclick="startScreen()">再来一局</button></div>`;
+   <div style="margin-top:12px;display:flex;gap:8px"><button class="primary opt" style="flex:1" onclick="startScreen()">再来一局</button><button class="opt" onclick="exportReplay()" title="导出本局完整日志">📥 导出复盘</button></div>`;
   if(_storyTut){ TUT_SEEN.add('victory'); _storyTut=false;
     m.innerHTML += `<div class="hint" style="margin-top:10px;border-color:var(--gold)"><b style="color:var(--gold)">🎓 剧情教程完成！</b><br>你刚刚靠自己的操作击败了 AI —— 发射探测器、移动、环绕、留下生命痕迹、扫描赢扇区、分析数据、发现外星文明、研究科技、抢占金色计分板……这些就是 SETI 的全部核心玩法。现在可以开始真正的对局了，祝你好运！</div>`;
     endStoryTutorial();
