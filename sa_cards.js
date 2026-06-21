@@ -1,0 +1,57 @@
+/* SETI · Space Agencies 扩展主牌库卡（42 张, SA.1–SA.42）
+   数据：said/name/cost/cols(扇区颜色,扫描用)/inc(收入,塞牌)/corner(左上角自由行动)/fx(主行动效果)/note
+   元数据(cost/inc/corner/cols)取自权威仓库 spaceAgencyCards.ts，准确；
+   主行动 fx 为"忠实在意"映射——资源/发射/移动/扫描/科技/信号令牌均忠实，
+   着陆/环绕/任务/终局等复杂效果按典型奖励近似（与基础牌同一处理方式，卡面文字仍为准）。
+   引擎通过 window.SA_CARDS 读取；buildDeck 在组织模式洗入主牌库。 */
+window.SA_CARDS = [
+  {said:'SA.1', name:'Reusable Lander · 可复用着陆器', cost:1, cols:['r'], inc:'credit', corner:'publicity', fx:{trace:'land',vp:2}, note:'着陆（近似：+登陆痕迹+2分）'},
+  {said:'SA.2', name:'Tracking & Data Relay Satellite · 跟踪与数据中继卫星', cost:1, cols:['r'], inc:'card', corner:'data', fx:{}, note:'无主行动效果（适合塞收入/弃角标/扫描弃牌）'},
+  {said:'SA.3', name:'NASA Deep Space Network · NASA深空网', cost:2, cols:['k'], inc:'energy', corner:'publicity', fx:{signalToken:3}, note:'🔔 +3 信号令牌'},
+  {said:'SA.4', name:'Breakthrough Message · 突破信息', cost:1, cols:['k'], inc:'credit', corner:'publicity', fx:{signalToken:1,move:1}, note:'🔔 +1 信号令牌 +1 移动'},
+  {said:'SA.5', name:'Servicing Mission · 在轨维修任务', cost:1, cols:['b'], inc:'credit', corner:'publicity', fx:{data:1,move:1}, note:'+1 数据 +1 移动'},
+  {said:'SA.6', name:'Live Landing Broadcast · 着陆直播', cost:2, cols:['b'], inc:'card', corner:'publicity', fx:{move:1,trace:'land',vp:2}, note:'移动 + 着陆（近似 +登陆痕迹+2分）'},
+  {said:'SA.7', name:'Twin Probes · 双子探测器', cost:3, cols:['r'], inc:'energy', corner:'publicity', fx:{research:'probe',credits:2}, note:'旋转 + 研究探测器科技 + 2 信用'},
+  {said:'SA.8', name:'Quantum Data Storage · 量子数据存储', cost:3, cols:['y'], inc:'energy', corner:'publicity', fx:{research:'comp',vp:3}, note:'旋转 + 研究电脑科技（终局近似 +3分）'},
+  {said:'SA.9', name:'Lunar Crater Radio Telescope · 月坑射电望远镜', cost:3, cols:['b'], inc:'card', corner:'data', fx:{research:'tele',data:1}, note:'旋转 + 研究望远镜科技 + 1 数据'},
+  {said:'SA.10', name:'First Human in Space · 人类首次太空飞行', cost:4, cols:['r'], inc:'energy', corner:'move', fx:{publicity:10,vp:3}, note:'+10 公关（终局近似 +3分）'},
+  {said:'SA.11', name:'Psyche Probe · 普赛克探测器', cost:3, cols:['r'], inc:'card', corner:'data', fx:{launch:1,publicity:1,vp:3,energy:2}, note:'发射 + 1公关（任务近似 +3分+2能量）'},
+  {said:'SA.12', name:'Two-planet Flyby Maneuver · 双行星飞掠', cost:1, cols:['y'], inc:'credit', corner:'data', fx:{move:2}, note:'+2 移动'},
+  {said:'SA.13', name:'James Clerk Maxwell Telescope · 麦克斯韦望远镜', cost:2, cols:['y'], inc:'card', corner:'move', fx:{scan:true}, note:'执行一次扫描'},
+  {said:'SA.14', name:'Reusable Rocket · 可复用火箭', cost:2, cols:['b'], inc:'energy', corner:'data', fx:{launch:1,publicity:1}, note:'发射 + 1 公关'},
+  {said:'SA.15', name:'Iterative Engineering · 迭代工程', cost:3, cols:['b'], inc:'credit', corner:'data', fx:{research:'any'}, note:'旋转 + 研究任意科技'},
+  {said:'SA.16', name:'Astronaut Training Experience · 宇航员训练体验', cost:2, cols:['b'], inc:'credit', corner:'move', fx:{publicity:5,vp:2}, note:'+4公关（任务近似 +2分+1公关）'},
+  {said:'SA.17', name:'Paid Media Coverage · 付费媒体报道', cost:0, cols:['y'], inc:'credit', corner:'data', fx:{}, note:'无主行动效果（适合塞收入/弃角标）'},
+  {said:'SA.18', name:'Contracted Research · 外包研究', cost:2, cols:['r'], inc:'credit', corner:'data', fx:{research:'any'}, note:'旋转 + 研究任意科技'},
+  {said:'SA.19', name:'New Assignment · 新任命', cost:2, cols:['y'], inc:'energy', corner:'publicity', fx:{}, note:'无主行动效果（适合塞收入/弃角标）'},
+  {said:'SA.20', name:'Well Executed Project · 出色完成的项目', cost:1, cols:['r'], inc:'card', corner:'move', fx:{publicity:1}, note:'+1 公关'},
+  {said:'SA.21', name:'Orbital Refueling · 在轨加注', cost:0, cols:['b'], inc:'card', corner:'data', fx:{energy:2}, note:'+2 能量（任务近似）'},
+  {said:'SA.22', name:'TESS Satellite · TESS 卫星', cost:0, cols:['y'], inc:'credit', corner:'publicity', fx:{sig:['any','any']}, note:'标记 2 个任意扇区信号'},
+  {said:'SA.23', name:'Neutral Buoyancy Training · 中性浮力训练', cost:1, cols:['y'], inc:'energy', corner:'move', fx:{publicity:1,card:1,vp:3}, note:'+1公关（任务近似 +抽1卡+3分）'},
+  {said:'SA.24', name:'Space Elevator · 太空电梯', cost:2, cols:['y'], inc:'card', corner:'publicity', fx:{research:'probe',launch:1}, note:'研究探测器 + 发射（任务近似）'},
+  {said:'SA.25', name:'LIGO · 激光干涉引力波天文台', cost:1, cols:['r'], inc:'energy', corner:'publicity', fx:{research:'tele',signalToken:2}, note:'🔔 研究望远镜 + 2 信号令牌（任务近似）'},
+  {said:'SA.26', name:'New AI Models · 新AI模型', cost:0, cols:['b'], inc:'credit', corner:'publicity', fx:{research:'comp',data:2}, note:'研究电脑 + 2 数据（任务近似）'},
+  {said:'SA.27', name:'Better Solar Panels · 更优太阳能板', cost:0, cols:['r'], inc:'card', corner:'publicity', fx:{}, note:'无主行动效果（适合塞收入/弃角标）'},
+  {said:'SA.28', name:'Restructuring · 重组', cost:1, cols:['r'], inc:'credit', corner:'data', fx:{publicity:2,card:1}, note:'+2公关 +抽1卡（任务近似）'},
+  {said:'SA.29', name:'Abandoned Mission · 放弃的任务', cost:1, cols:['b'], inc:'energy', corner:'move', fx:{}, note:'无主行动效果（适合塞收入/弃角标）'},
+  {said:'SA.30', name:'Akatsuki Orbiter · 拂晓号轨道器', cost:2, cols:['b'], inc:'energy', corner:'move', fx:{data:1,vp:1,publicity:1}, note:'环绕（近似 +1数据+1分）+1公关'},
+  {said:'SA.31', name:'Ingenuity Helicopter · 机智号直升机', cost:1, cols:['y'], inc:'credit', corner:'publicity', fx:{trace:'land',vp:2}, note:'着陆（近似 +登陆痕迹+2分，终局近似）'},
+  {said:'SA.32', name:'MUREP Idea Competition · MUREP创意竞赛', cost:1, cols:['r'], inc:'credit', corner:'data', fx:{publicity:1,card:2}, note:'+1公关 +抽2卡'},
+  {said:'SA.33', name:'Delayed Launch · 延期发射', cost:1, cols:['b'], inc:'energy', corner:'move', fx:{publicity:1,launch:1}, note:'+1公关 + 发射（任务近似）'},
+  {said:'SA.34', name:'Private Sector Investment · 私营部门投资', cost:2, cols:['r'], inc:'energy', corner:'data', fx:{credits:2}, note:'增加收入（近似 +2信用）'},
+  {said:'SA.35', name:'NASA Exoplanet Archive · NASA系外行星档案', cost:1, cols:['y'], inc:'card', corner:'publicity', fx:{signalToken:1,energy:1}, note:'🔔 +1信号令牌 +1能量（任务近似）'},
+  {said:'SA.36', name:'Big Ear Radio Telescope · 大耳朵射电望远镜', cost:2, cols:['k'], inc:'card', corner:'move', fx:{sig:['y','r','b']}, note:'标记黄/红/蓝各 1 个信号'},
+  {said:'SA.37', name:'Pandora Satellite · 潘多拉卫星', cost:0, cols:['y'], inc:'card', corner:'publicity', fx:{sig:['any']}, note:'标记 1 个任意扇区信号'},
+  {said:'SA.38', name:'Space Rendezvous · 太空交会', cost:1, cols:['y'], inc:'energy', corner:'data', fx:{publicity:1,move:1}, note:'+1公关 +1移动'},
+  {said:'SA.39', name:'Grand Tour Program · 大巡游计划', cost:2, cols:['r'], inc:'credit', corner:'publicity', fx:{move:2,vp:3}, note:'+2移动（终局近似 +3分）'},
+  {said:'SA.40', name:'Hall-effect Thruster · 霍尔效应推进器', cost:2, cols:['b'], inc:'credit', corner:'data', fx:{move:5}, note:'+5 移动'},
+  {said:'SA.41', name:'Exoplanet Survey · 系外行星巡天', cost:2, cols:['b'], inc:'energy', corner:'move', fx:{signalToken:1,publicity:1,card:1,vp:4}, note:'🔔 +1信号令牌 +1公关 +抽1卡（任务近似 +4分）'},
+  {said:'SA.42', name:'LOFAR Array · 低频射电阵列', cost:2, cols:['y'], inc:'card', corner:'publicity', fx:{scan:true,vp:8}, note:'扫描（任务近似 +8分）'},
+  // 官方促销卡（本地促销文本，精确）
+  {said:'SA.P1', name:'Space Agencies · 太空机构（促销）', cost:1, cols:['k'], inc:'credit', corner:'publicity', fx:{launch:1,signalToken:1}, note:'🔔 发射探测器 + 1 信号令牌'},
+  {said:'SA.P2', name:'DLR · 德国航空航天中心（促销）', cost:2, cols:['r'], inc:'credit', corner:'move', fx:{launch:1,dlr:true}, note:'发射；按与地球对齐扇区颜色额外获得（黄→2移动/蓝→2数据/红→2公关/黑→6分）'},
+  // 可触发任务促销卡：环绕/着陆火星(或其卫星)即盖圈得奖励（"打出含Mars背景的卡"那一半因需flavor数据从略）
+  {said:'SA.P3', name:'Gateway to Mars · 火星门户（促销）', cost:1, cols:['r'], inc:'credit', corner:'publicity',
+   trig:{ev:'atPlanet', planets:['mars'], reward:{publicity:2,vp:5}, circles:1, desc:'环绕或着陆火星 → +2公关+5分'},
+   note:'🎯 可触发任务：环绕或着陆火星 → +2公关 +5分'},
+];
