@@ -559,6 +559,23 @@ ALIEN_SPECIES[1].handFree=true; // 埃克塞尔外星卡不计入手牌上限
 ALIEN_SPECIES[2].token={key:'exofossil',gainOn:'analyze',vpEach:0,name:'化石',tdesc:'每次【分析】提取外星化石并立即标记1个信号（化石不留至终局）'};
 ALIEN_SPECIES[3].token={key:'message',gainOn:'none',vpEach:0,name:'讯息',tdesc:'发现后每超过 +15 分领取1格讯息板奖励：任意痕迹 / +3公关 / +1能量+1卡 / +8分（各一次）'};
 ALIEN_SPECIES[4].token={key:'anomaly',gainOn:'rotate',vpEach:2,name:'异象标记',move:1,tdesc:'每次【太阳系旋转】获得1异象标记(+1公关+1移动)，终局每个+2分'};
+// —— 七肢桶（Heptapods，电影《降临》原型）：粉丝扩展第9个物种（by Tahsin Shamma）。默认不出现，需在开始界面勾选才会登场。——
+// 忠实核心：它的"语标合作板"是高度多人/合作的（相邻玩家共享合作奖励），在 1v1 引擎里抽象为：每标记1个信号收集1个语标，
+// 按"非线性时间"获得轮转的递增奖励；终局按语标数递增计分。合作板几何与跨玩家合作奖励按本项目一贯做法抽象处理。
+const HEPTA_SET=[0,1,3,5,8,12,17,23,30];   // 终局：按语标数（0..8+）递增计分（填满语标板）
+ALIEN_SPECIES.push({key:'heptapods',name:'七肢桶 Heptapods',color:'#3fd0c0',fanEgg:true,
+  flavor:'以非线性方式感知时间的语言文明（电影《降临》原型）。信奉"非零和"——交流而非零和博弈。',
+  bonus:{vp:3,card:2,desc:'发现者每人 +3分 +2张七肢桶卡'},
+  passive:'scan',pdesc:'被动：每次【扫描】额外标记 1 个信号（聆听外星语言）。',
+  token:{key:'logogram',gainOn:'signal',vpEach:0,name:'语标',tdesc:'每标记1个信号收集1个"语标"（七肢桶语标），按非线性时间轮转获得递增奖励；终局按语标数递增计分(1/3/5/8/12/17/23/30)'},
+  cards:[
+    {et:'HEP.1',name:'降临 Ankunft',cost:0,inc:'card',corner:'publicity',cols:['b'],fx:{card:1,vp:1},note:'每当你放置1个语标即获奖励（重复任务，近似为抽1卡+1分）。'},
+    {et:'HEP.2',name:'非零和博弈 Nicht-Nullsummenspiel',cost:0,inc:'energy',corner:'publicity',cols:['b'],fx:{energy:1,vp:1},note:'合作而非零和：放置语标时双方受益（1v1 抽象为 +1能量+1分）。'},
+    {et:'HEP.3',name:'离去 Abreise',cost:0,inc:'credit',corner:'move',cols:['r'],fx:{move:1,vp:1},note:'相邻自己的语标可额外取得合作奖励（抽象为 +1移动+1分）。'},
+    {et:'HEP.4',name:'自我感知 Wahrnehmung des Selbst',cost:0,inc:'energy',corner:'data',cols:['y'],fx:{energy:1},note:'每拥有1个语标 +1能量。'},
+    {et:'HEP.5',name:'时间感知 Wahrnehmung der Zeit',cost:2,inc:'credit',corner:'publicity',cols:['y'],fx:{vp:4},note:'集满外环语标终局大量计分（近似终局+4分）。'},
+    {et:'HEP.6',name:'非线性文字 Nichtlineare Orthographie',cost:1,inc:'card',corner:'move',cols:['k'],fx:{research:'comp'},note:'预见未来：旋转并研究1项电脑科技。'},
+  ]});
 function hasAlien(p,key){ return p.alienPowers && p.alienPowers.includes(key); }
 
 /* ---------- 音效系统（WebAudio 合成，无需任何音频文件） ---------- */
@@ -897,8 +914,15 @@ function newGame(opts){
     shuffle(techStacks[t]);
     techStacks[t].twoPoint=true; // 该类型首个被取走者额外+2分
   }
-  // 外星物种：从 5 个真实物种随机选 2 个（开局隐藏）
-  const sp=shuffle(ALIEN_SPECIES.slice()).slice(0,2);
+  // 外星物种：随机选 2 个（开局隐藏）。七肢桶(粉丝彩蛋)默认排除；勾选后强制登场（占其中 1 席）。
+  let sp;
+  if(_selHeptapods){
+    const hep=ALIEN_SPECIES.find(s=>s.key==='heptapods');
+    const others=shuffle(ALIEN_SPECIES.filter(s=>s.key!=='heptapods')).slice(0,1);
+    sp=shuffle([hep, ...others]);
+  } else {
+    sp=shuffle(ALIEN_SPECIES.filter(s=>!s.fanEgg)).slice(0,2);
+  }
   const aliens=sp.map(s=>({
     species:s, name:s.name, bonus:s.bonus, revealed:false,
     slots:{land:null,win:null,analyze:null}, // null=空, 'you','ai','neu'
@@ -1039,7 +1063,7 @@ function renderLongTerm(){
 }
 
 /* ---------- 开始 / 组织选择界面 ---------- */
-let _selNumP=2, _selExpansion=false;
+let _selNumP=2, _selExpansion=false, _selHeptapods=false;
 let _selOpps=[{aiMode:(typeof window!=='undefined'&&window.AZ_WEIGHTS)?'alphazero':'neural',rivalDiff:3}];   // 默认最强可用AI
 function aiAvail(){ return !!(window.AI_NN && window.AI_WEIGHTS); }
 function setNumP(n){ _selNumP=n;
@@ -1050,6 +1074,7 @@ function setNumP(n){ _selNumP=n;
 function setOppMode(k,mode){ _selOpps[k].aiMode=mode; startScreen(); }
 function setOppDiff(k,d){ _selOpps[k].rivalDiff=d; startScreen(); }
 function setExpansion(v){ _selExpansion=v; startScreen(); }
+function setHeptapods(v){ _selHeptapods=v; startScreen(); }
 function classicOpts(){ return {mode:'classic', opponents:_selOpps.slice(0,_selNumP-1).map(o=>({aiMode:o.aiMode,rivalDiff:o.rivalDiff})), expansion:_selExpansion}; }
 function startScreen(){
   const m=$('modal');
@@ -1081,6 +1106,12 @@ function startScreen(){
     <button class="opt ${_selExpansion?'gold':''}" style="flex:1" onclick="setExpansion(true)">${_selExpansion?'✓ ':''}基础+扩展（+44 SA卡/信号令牌）</button>
    </div>
    <div class="small muted" style="margin-top:4px">扩展卡会洗入经典模式主牌库（含 8 张产信号令牌的卡）；组织模式始终含扩展。</div>
+   <div style="margin:10px 0 4px;color:#3fd0c0;font-weight:800;letter-spacing:.5px">👽 粉丝彩蛋</div>
+   <div style="display:flex;gap:7px">
+    <button class="opt ${!_selHeptapods?'gold':''}" style="flex:1" onclick="setHeptapods(false)">${!_selHeptapods?'✓ ':''}标准 8 物种</button>
+    <button class="opt ${_selHeptapods?'gold':''}" style="flex:1" onclick="setHeptapods(true)">${_selHeptapods?'✓ ':''}加入七肢桶（《降临》第9物种）</button>
+   </div>
+   <div class="small muted" style="margin-top:4px">勾选后，每局必有"七肢桶"登场（粉丝设计 by Tahsin Shamma，合作板几何已为单机抽象；其余 1 个物种随机）。</div>
    <div style="margin-top:14px;display:flex;flex-direction:column;gap:7px">
    ${(()=>{ const sv=loadSave(); return sv&&sv.meta?`<button class="opt gold" style="margin:0;border:1px solid var(--gold)" onclick="resumeGame()">▶ 继续上次对局（${sv.meta.mode==='org'?'组织':'经典'}模式 · ${sv.meta.np} 人 · 第 ${sv.meta.round}/${sv.meta.maxRound} 回合）</button>`:''; })()}
    <button class="opt primary" style="margin:0" onclick="newGame(classicOpts())">🎮 经典模式（${_selNumP} 人 · 5 回合）${_selExpansion?'· 含扩展':''}</button>
@@ -1240,6 +1271,12 @@ function alienToken(p, ev, ctx){
       let t=null;
       if(ev==='signal') t='sig'+(ctx.color||'y'); else if(ev==='orbit')t='orbit'; else if(ev==='land')t='land'; else if(ev==='research')t='tech';
       if(t){ p.glyphTypes=p.glyphTypes||{}; p.glyphTypes[t]=(p.glyphTypes[t]||0)+1; }
+    } else if(key==='heptapods'){      // 七肢桶：每标记1个信号→收集1个语标，按"非线性时间"轮转获得递增奖励；终局按数量递增计分
+      if(ev==='signal'){
+        const rw=[{move:1},{energy:1},{publicity:1},{card:1},{data:1},{vp:1}][(T.logogram||0)%6];
+        T.logogram=(T.logogram||0)+1; gain(p,rw,true);
+        log3(p,'七肢桶：收集第 '+T.logogram+' 个语标（终局按语标数递增计分）。');
+      }
     }
     // exertians（隐藏危险值）在 resolveCard 处理；centaurians（讯息里程碑）在 resolveMilestones 处理
   }
@@ -1262,6 +1299,7 @@ function alienTokenVP(p){
     else if(key==='amoeba') v+=(T.organelle||0)*1;
     else if(key==='arkhos') v+=(T.security||0)*2;
     else if(key==='glyphids'){ const n=p.glyphTypes?Object.keys(p.glyphTypes).length:0; v+=GLYPH_SET[Math.min(n,7)]; }
+    else if(key==='heptapods'){ const n=T.logogram||0; v+=HEPTA_SET[Math.min(n,HEPTA_SET.length-1)]; }
   }
   return v;
 }
