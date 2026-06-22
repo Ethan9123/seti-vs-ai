@@ -1119,6 +1119,7 @@ function startScreen(){
    <button class="opt primary" style="margin:0" onclick="newGame(classicOpts())">🎮 经典模式（${_selNumP} 人 · 5 回合）${_selExpansion?'· 含扩展':''}</button>
    <button class="opt gold" style="margin:0" onclick="orgPickScreen()">🏢 组织模式（2 人 · 选择组织）</button>
    <button class="opt gold" style="margin:0" onclick="startStoryTutorial()">🎬 剧情教程（手把手通关一局，零基础必玩）</button>
+   <button class="opt" style="margin:0;border:1px solid #3fd0c0" onclick="spectateSetupScreen()">🎙️ AI 解说观战（看 AI 像人一样对决·边看边学）</button>
    <button class="opt" style="margin:0" onclick="startTutorial()">📖 界面速览（快速看一遍界面）</button>
    <button class="opt" style="margin:0" onclick="showCardDex()">🗂 卡牌图鉴（浏览全部 200 张卡牌，开局前先看看）</button></div>
    ${statsSummaryHTML()}`;
@@ -1903,6 +1904,10 @@ function applyEffect(p,fx){
     if(col==='y')gain(p,{move:2},true); else if(col==='b')gain(p,{data:2},true);
     else if(col==='r')gain(p,{publicity:2},true); else if(col==='k')gain(p,{vp:6},true);
   }
+  if(fx.enablePluto){ // “Not a planet since 2006”：解锁冥王星促销（按玩家授权，复用既有冥王星系统）
+    if(!p.pluto) p.pluto={orb:false,land:false};
+    G.pluto=true;
+  }
   // land/orbit 等被动能力：保留卡面展示，引擎不强制触发
 }
 function performScanFree(p){
@@ -2114,6 +2119,7 @@ function conditionMet(p,cond){
   if(cond==='visitOuter') return onPlanets(['uranus','neptune']);
   if(cond==='land1')return p.landers>=1;
   if(cond==='orbit2')return p.orbiters>=2;
+  if(cond==='orbitOrLand1')return (p.orbiters+p.landers)>=1;
   return false;
 }
 function youCompleteMissions(){
@@ -2210,6 +2216,7 @@ function nextPlayer(){
 function scheduleTurn(){
   G._noUI=0;                 // 新回合开始 → 解除"非交互结算"封锁
   if(SIM)return;
+  if(G.spectate && SPEC && SPEC.on){ const sp=G.players[G.active]; setTimeout(()=>spectatorTurn(sp),300); return; }  // 🎙️ 观战改道
   const p=G.players[G.active];
   if(p && p.isAI && !p.passed) setTimeout(aiTurn,600);
   else setPhaseYou();
@@ -2240,6 +2247,7 @@ function doPass(p){
       log3(p,'选择跳过（结束本回合行动）。');
       resolveMilestones();
       renderAll();
+      if(G.spectate && SPEC && SPEC._afterHook){ SPEC._afterHook(); return; }  // 🎙️ 观战：跳过也走解说后台
       if(allPassed()){ endRound(); return; }
       // 环形切换到下一未 pass 玩家
       let i=nextIdx(G.active), g=0;
@@ -2382,6 +2390,7 @@ function endgameCardPts(p,e){
    =========================================================== */
 function aiTurn(){
   if(G.over)return;
+  if(G.spectate)return;             // 🎙️ 观战模式由 spectatorTurn 接管，忽略遗留的 aiTurn 定时器
   const p=G.players[G.active];
   if(!p || !p.isAI){ return; }      // 安全：仅 AI 玩家在此行动
   if(p.passed){ nextPlayer(); return; }
@@ -2827,6 +2836,7 @@ function aiExecute(p,action){
   const after=()=>{ // 主行动后 → 环形交给下一未 pass 玩家
     resolveMilestones(); renderAll();
     if(G.over)return;
+    if(G.spectate && SPEC && SPEC._afterHook){ SPEC._afterHook(); return; }  // 🎙️ 观战：交解说后台接管节奏
     setTimeout(()=>{
       if(allPassed()){ endRound(); return; }
       let i=nextIdx(G.active), g=0;
@@ -2857,6 +2867,302 @@ function aiExecute(p,action){
 function aiPass(p){
   doPass(p);
 }
+
+/* ===================== 🎙️ AI 解说观战模式 (spectate) =====================
+   全员 AI 对决；每步思考 ~5 秒，解说员讲"要做什么·为什么"，行动后讲"发生了什么·给你的启示"。
+   架构：players[0].isAI=true(关掉所有人类模态) + scheduleTurn 改道 spectatorTurn + aiExecute.after 经 _afterHook 接管节奏；
+   "发生了什么"用 G._replay 长度差分；"算一次/说这次/做这次"——预算的 action 直接喂给 aiExecute，绝不重算。 */
+var SPEC=null, SPEC_CFG={brain:'heuristic',numP:2};
+const SPEC_SPEEDMUL={1:1,2:2,0:0};
+const _RAF=(typeof requestAnimationFrame==='function')?requestAnimationFrame:(fn=>setTimeout(fn,16));
+const _CAF=(typeof cancelAnimationFrame==='function')?cancelAnimationFrame:(id=>clearTimeout(id));
+const _NOW=(typeof performance!=='undefined'&&performance.now)?()=>performance.now():()=>Date.now();
+function thinkDuration(){ if(!SPEC)return 0; if(SPEC.speed===0)return 0; return Math.round(SPEC.thinkMs/(SPEC_SPEEDMUL[SPEC.speed]||1)); }
+
+/* ---- 设置弹窗 ---- */
+function spectateSetupScreen(){ renderSpecSetup(); $('modalbg').style.display='flex'; }
+function setSpecCfg(k,v){ SPEC_CFG[k]=v; if(k==='numP'&&v>2&&SPEC_CFG.brain==='rival')SPEC_CFG.brain='heuristic'; renderSpecSetup(); }
+function renderSpecSetup(){
+  const sel='border:2px solid #3fd0c0;color:#3fd0c0';
+  const b=(id,lbl)=>`<button class="opt" style="display:inline-block;width:auto;margin:3px 5px;${SPEC_CFG.brain===id?sel:''}" onclick="setSpecCfg('brain','${id}')">${lbl}</button>`;
+  const np=(n)=>`<button class="opt" style="display:inline-block;width:auto;margin:3px 5px;${SPEC_CFG.numP===n?sel:''}" onclick="setSpecCfg('numP',${n})">${n} 个 AI</button>`;
+  $('modal').innerHTML=`<h2>🎙️ AI 解说观战</h2>
+    <div class="small muted" style="margin-bottom:8px;line-height:1.5">看 AI 像人类一样一步步对决：每步思考约 5 秒，解说员讲它<b>要做什么、为什么</b>；行动后讲<b>发生了什么、给你的启示</b>——零经验也能边看边学。</div>
+    <div style="margin:8px 0"><b>解说大脑</b><br>${b('heuristic','⚙️ 启发式（推荐·理由最清晰）')}${b('neural','🧠 全局神经')}${SPEC_CFG.numP===2?b('rival','🛸 官方Rival'):''}</div>
+    <div style="margin:8px 0"><b>对局人数</b><br>${np(2)}${np(3)}${np(4)}</div>
+    <div style="margin-top:12px"><button class="opt primary" style="display:inline-block;width:auto" onclick="closeModal();startSpectate(Object.assign({},SPEC_CFG))">▶ 开始观战</button>
+    <button class="opt" style="display:inline-block;width:auto" onclick="closeModal()">取消</button></div>`;
+}
+/* ---- 启动：全员 AI + 进入观战循环 ---- */
+function startSpectate(cfg){
+  cfg=cfg||SPEC_CFG;
+  let brain=cfg.brain||'heuristic'; const np=clamp(cfg.numP||2,2,4);
+  if(brain==='rival'&&np>2)brain='neural';
+  const oppList=[]; for(let k=0;k<np-1;k++) oppList.push({aiMode:brain,rivalDiff:cfg.rivalDiff||3});
+  newGame({mode:'classic', aiMode:brain, opponents:oppList});
+  G.players.forEach((p,i)=>{ p.isAI=true; p.aiMode=brain; p.idx=i; p.name='AI·'+('甲乙丙丁'[i]||('P'+(i+1))); });
+  G.spectate=true;
+  SPEC={on:true,speed:1,paused:false,thinkMs:5000,brain,timer:0,raf:0,deadline:0,remain:0,onDone:null,_total:0,_lp:-1,_lq:-1,p:null,action:null,_afterHook:null};
+  buildSpectatorPanel(); renderAll(); scheduleTurn();
+}
+/* ---- 非阻塞倒计时 ---- */
+function cancelSpec(){ if(!SPEC)return; clearTimeout(SPEC.timer); _CAF(SPEC.raf); SPEC.timer=0;SPEC.raf=0;SPEC.onDone=null; }
+function specCountdown(ms,onDone){
+  cancelSpec(); if(!SPEC)return;
+  if(ms<=0){ if(onDone)onDone(); return; }
+  SPEC.deadline=_NOW()+ms; SPEC.onDone=onDone; SPEC._total=ms;
+  setBar(1,(ms/1000).toFixed(1)+'s · 思考中…');   // 立即铺满，避免 RAF 首帧前空条
+  const tick=()=>{ if(!SPEC||!SPEC.on||G.over)return;
+    if(SPEC.paused){ SPEC.raf=_RAF(tick); return; }
+    const left=Math.max(0,SPEC.deadline-_NOW());
+    setBar(left/SPEC._total,(left/1000).toFixed(1)+'s · 思考中…');
+    if(left<=0){ const f=SPEC.onDone; SPEC.onDone=null; if(f)f(); return; }
+    SPEC.raf=_RAF(tick); };
+  SPEC.timer=setTimeout(()=>{ if(SPEC&&SPEC.onDone){ const f=SPEC.onDone; SPEC.onDone=null; f(); } }, ms);
+  SPEC.raf=_RAF(tick);
+}
+function togglePause(){ if(!SPEC)return; SPEC.paused=!SPEC.paused;
+  if(SPEC.paused){ SPEC.remain=Math.max(0,SPEC.deadline-_NOW()); clearTimeout(SPEC.timer); }
+  else if(SPEC.onDone){ SPEC.deadline=_NOW()+SPEC.remain; clearTimeout(SPEC.timer);
+    SPEC.timer=setTimeout(()=>{const f=SPEC.onDone;SPEC.onDone=null;if(f)f();},SPEC.remain); }
+  renderSpecBtns(); }
+function specSkip(){ if(!SPEC||!SPEC.onDone)return; clearTimeout(SPEC.timer); _CAF(SPEC.raf); const f=SPEC.onDone; SPEC.onDone=null; if(f)f(); }
+function setSpecSpeed(s){ if(!SPEC)return; const old=SPEC.speed; SPEC.speed=s;
+  if(SPEC.onDone&&!SPEC.paused){ const left=Math.max(0,SPEC.deadline-_NOW());
+    const mul=(SPEC_SPEEDMUL[s]||1)/(SPEC_SPEEDMUL[old]||1); const nl=s===0?0:Math.round(left/mul);
+    const f=SPEC.onDone; clearTimeout(SPEC.timer); _CAF(SPEC.raf); SPEC.onDone=null; specCountdown(nl,f); }
+  renderSpecBtns(); }
+/* ---- 一个 AI 的回合：自由行动→预算主行动→pre 解说→思考→执行 ---- */
+function spectatorTurn(p){
+  if(SIM||!SPEC||!SPEC.on||G.over)return;
+  if(p.passed){ advanceSpectate(); return; }
+  SPEC.p=p; highlightActor(p);
+  const before=G._replay.length;
+  if(!G._tut) aiFreePhase(p);
+  const freeLines=G._replay.slice(before);
+  const action=aiPlutoAction(p)||aiChooseMain(p);
+  SPEC.action=action;
+  const ctx=buildCtx(p,action); ctx.freeLines=freeLines; ctx.snap=resSnapshot(p);
+  showSpeech(p,'pre',narrate(p,action,'pre',ctx));
+  showSpeech(p,'post',null);
+  specCountdown(thinkDuration(), ()=>spectatorExecute(p,action,ctx));
+}
+function spectatorExecute(p,action,ctx){
+  if(SIM||!SPEC||!SPEC.on||G.over)return;
+  const before=G._replay.length;
+  SPEC._afterHook=()=>{ SPEC._afterHook=null;
+    if(!SPEC||!SPEC.on)return;
+    ctx.logDiff=G._replay.slice(before); ctx.delta=resDelta(p,ctx.snap);
+    showSpeech(p,'post',narrate(p,action,'post',ctx));
+    const dwell=SPEC.speed===0?0:Math.max(700,Math.round(1600/(SPEC_SPEEDMUL[SPEC.speed]||1)));
+    specCountdown(dwell, ()=>advanceSpectate());
+  };
+  aiExecute(p,action);   // scan 异步同样经 after→_afterHook
+}
+function advanceSpectate(){
+  if(!SPEC||!SPEC.on||G.over)return;
+  cancelSpec();
+  if(allPassed()){ endRound(); return; }      // endRound 末尾 scheduleTurn 又被改道拦回
+  let i=nextIdx(G.active),g=0; while(G.players[i].passed&&g++<G.players.length)i=nextIdx(i);
+  G.active=i; renderAll(); scheduleTurn();
+}
+function exitSpectate(){
+  if(SPEC)SPEC.on=false; cancelSpec();
+  G.spectate=false; G.over=true;
+  SPEC=null; removeSpectatorPanel(); clearSave(); startScreen();
+}
+/* ---- 「为什么」上下文（纯读状态，与大脑无关）---- */
+function wouldCompleteAlien(p,color){
+  for(const al of G.aliens){ if(al.revealed)continue;
+    if(al.slots[color]===null && ['land','win','analyze'].filter(c=>c!==color).every(c=>al.slots[c]!==null)) return al; }
+  return null;
+}
+function buildCtx(p,a){
+  const c={firsts:{},sector:{},mile:{},eventKey:null,species:null};
+  if(a.a==='orbit'){ c.firsts.orbit=(G.firstOrbited[a.b]===undefined); }
+  if(a.a==='land'){ c.firsts.land=(G.firstLanded[a.b]===undefined); c.species=wouldCompleteAlien(p,'land'); }
+  if(a.a==='analyze'){ c.species=wouldCompleteAlien(p,'analyze'); }
+  if(a.a==='scan'){ const s=G.sectors[0]; if(s){ c.sector.mine=s.slot.filter(x=>x===p.idx).length; let mr=0;
+      G.players.forEach(q=>{ if(q.idx!==p.idx){ const n=s.slot.filter(x=>x===q.idx).length; if(n>mr)mr=n; } }); c.sector.rival=mr; }
+    c.species=c.species||wouldCompleteAlien(p,'win'); }
+  [25,50,70].forEach(m=>{ if(p.vp<m && p.vp>=m-6) c.mile.cross=m; });
+  if(a.a==='orbit'&&c.firsts.orbit) c.eventKey='event:firstOrbit';
+  else if(a.a==='land'&&c.firsts.land) c.eventKey='event:firstLand';
+  else if((a.a==='land'||a.a==='analyze'||a.a==='scan')&&c.species) c.eventKey='event:discover';
+  return c;
+}
+function resSnapshot(p){ return {信用:p.credits,能量:p.energy,公关:p.publicity,数据:p.data,分:p.vp}; }
+function resDelta(p,s){ const now={信用:p.credits,能量:p.energy,公关:p.publicity,数据:p.data,分:p.vp}; const d=[];
+  for(const k in now){ if(now[k]!==s[k]) d.push({label:k+' '+s[k]+'→'+now[k], up:now[k]>s[k], vp:k==='分'}); } return d; }
+/* ---- 解说生成 ---- */
+function specTok(p,a,ctx){
+  const T={name:pname(p.idx),credits:p.credits,energy:p.energy,publicity:p.publicity,data:p.data,vp:p.vp,
+    probes:p.probes.length,orbits:p.orbiters,landers:p.landers,incCount:(p.incomeCards||[]).length};
+  try{
+    if(a.b&&PLANETS[a.b]){ T.planet=PLANETS[a.b].name;
+      if(a.a==='land'){ T.cost=landCost(p,a.b); T.pts=(PLANETS[a.b].land&&PLANETS[a.b].land.vp)||0; T.res=rwdText(PLANETS[a.b].land); T.color='黄'; }
+      if(a.a==='orbit'){ T.cost=2; T.pts=3; T.res=rwdText(PLANETS[a.b].orbit); } }
+    if(a.a==='scan'){ T.sector=(G.sectors[0]&&G.sectors[0].name)||'地球扇区'; T.color='粉'; if(ctx&&ctx.sector){ T.myCount=ctx.sector.mine||0; T.rivalCount=ctx.sector.rival||0; } }
+    if(a.a==='analyze') T.color='蓝';
+    if(a.a==='research'){ const av=availTechs(p); const t=av.length?aiPickTech(p,av):null; T.techType=t?TECHTYPENAME[t.type]:'科技'; T.tech=t?t.name:'科技'; }
+    if(a.a==='card'){ const c=p.hand[a.ci]; if(c){ T.card=c.name; T.cost=c.cost; T.fx=(c.note||fxText(c.fx)||'效果').slice(0,40); T.ev=T.fx; } }
+    if(ctx&&ctx.species){ T.species=ctx.species.name; T.bonus=ctx.species.bonus?ctx.species.bonus.desc:''; T.passive=(ctx.species.species&&ctx.species.species.pdesc)||ctx.species.pdesc||''; }
+    if(ctx&&ctx.mile&&ctx.mile.cross) T.milestone=ctx.mile.cross;
+  }catch(e){}
+  return T;
+}
+function fillTokens(s,T){ return String(s).replace(/\{(\w+)\}/g,(m,k)=>(T[k]!==undefined&&T[k]!==null&&T[k]!=='')?String(T[k]):'').replace(/（\s*）|【\s*】|「\s*」/g,'').replace(/\s{2,}/g,' ').trim(); }
+function specBrainTag(){ return SPEC&&SPEC.brain==='neural'?'🧠全局AI':SPEC&&SPEC.brain==='rival'?'🛸官方Rival':'⚙️启发式'; }
+function pickVariant(arr,phase){ if(!arr||!arr.length)return ''; const lastK=phase==='pre'?'_lp':'_lq'; let i=rng(arr.length);
+  if(arr.length>1){ let g=0; while(i===SPEC[lastK]&&g++<5)i=rng(arr.length); } SPEC[lastK]=i; return arr[i]; }
+function narrate(p,action,phase,ctx){
+  if(SIM||!SPEC)return {main:'',lesson:'',extra:'',delta:[]};
+  let key=ctx.eventKey||action.a; if(key==='plutoOrbit')key='orbit'; if(key==='plutoLand')key='land';
+  let bank=NARRATION[key]||NARRATION[action.a]||NARRATION._default;
+  const T=specTok(p,action,ctx);
+  if(phase==='pre'){
+    const txt=fillTokens(pickVariant(bank.pre,'pre'),T);
+    return {main:txt, lesson:'', extra:'', delta:[]};
+  } else {
+    const txt=fillTokens(pickVariant(bank.post,'post'),T);
+    // 实际日志（权威）+ 自由行动小结
+    const did=(ctx.logDiff||[]).map(l=>l.replace(/^\[(AI|你)\]\s*/,'').replace(/^·\s*/,'').replace(/^AI\s*/,'')).filter(x=>x&&x.length<60);
+    let extra=did.length?('实际：'+did.slice(0,4).join('；')):'';
+    const lesson=/启示[:：]/.test(txt)?txt.split(/启示[:：]/)[1].trim():'';
+    const main=/启示[:：]/.test(txt)?txt.split(/启示[:：]/)[0].trim():txt;
+    return {main, lesson, extra, delta:ctx.delta||[]};
+  }
+}
+/* ---- 面板 UI ---- */
+const SPEC_CSS=`#specPanel{position:fixed;left:50%;top:8px;transform:translateX(-50%);width:min(640px,94vw);z-index:90;
+ background:linear-gradient(180deg,#0d1f3aF2,#0a1730F2);border:1px solid #2a4f86;border-radius:12px;box-shadow:0 8px 30px #000a;
+ padding:9px 12px;font-size:13.5px;color:#dce8fb;backdrop-filter:blur(3px)}
+#specPanel .sphd{display:flex;align-items:center;gap:8px;font-weight:800}
+#specPanel .spdot{width:13px;height:13px;border-radius:50%;box-shadow:0 0 8px currentColor;flex:0 0 auto}
+#specBarWrap{height:7px;background:#0a1424;border-radius:5px;overflow:hidden;margin:6px 0}
+#specBar{height:100%;width:100%;background:linear-gradient(90deg,#3fd0c0,#52b9ff);transition:width .05s linear}
+#specPre{margin:5px 0;line-height:1.5}
+#specPre .splbl{color:#7fb6ff;font-weight:800;margin-right:5px}
+#specPost{margin:5px 0;line-height:1.5;border-top:1px dashed #2a4f86;padding-top:5px}
+#specPost .splbl{color:#5fe0a8;font-weight:800;margin-right:5px}
+#specPost .splesson{color:#ffd86b;margin-top:3px}
+#specPost .spextra{color:#9fb4d6;font-size:12px;margin-top:2px}
+.spchip{display:inline-block;padding:1px 7px;margin:2px 3px 0 0;border-radius:9px;font-size:12px;font-weight:700;background:#13294a;border:1px solid #2a4f86}
+.spchip.up{color:#5fe0a8;border-color:#2e6b4d}.spchip.dn{color:#ff9a8c;border-color:#7a3a32}.spchip.vp{color:#ffd86b;border-color:#7a5e1f}
+#specCtrl{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;align-items:center}
+#specCtrl button{background:#15294a;border:1px solid #2f5896;color:#cfe0fb;border-radius:7px;padding:4px 9px;font-size:12.5px;cursor:pointer}
+#specCtrl button:hover{background:#1d3a66}#specCtrl button.on{border-color:#3fd0c0;color:#3fd0c0}
+#specCtrl .spsp{margin-left:auto;color:#8aa6cf;font-size:11.5px}
+@media(max-width:760px){#specPanel{width:96vw;top:auto;bottom:6px;font-size:12.5px}}`;
+function buildSpectatorPanel(){
+  if(typeof document==='undefined')return;
+  if(!document.getElementById('specCSS')){ const st=document.createElement('style'); st.id='specCSS'; st.textContent=SPEC_CSS; (document.head||document.body).appendChild(st); }
+  if(document.getElementById('specPanel'))return;
+  const d=document.createElement('div'); d.id='specPanel';
+  d.innerHTML=`<div class="sphd"><span class="spdot" id="specDot" style="color:#fff"></span>
+    <span id="specActor">解说台</span><span style="font-weight:400;color:#8aa6cf" id="specStat"></span>
+    <span style="margin-left:auto;font-weight:400;color:#7fb6ff" id="specBrain">${specBrainTag()}</span></div>
+   <div id="specBarWrap"><div id="specBar"></div></div>
+   <div id="specPre"></div><div id="specPost"></div>
+   <div id="specCtrl">
+     <button onclick="specSkip()">⏭ 跳过思考</button>
+     <button id="specPauseBtn" onclick="togglePause()">⏸ 暂停</button>
+     <button id="spd1" onclick="setSpecSpeed(1)">1×</button>
+     <button id="spd2" onclick="setSpecSpeed(2)">2×</button>
+     <button id="spd0" onclick="setSpecSpeed(0)">⚡瞬间</button>
+     <button onclick="exitSpectate()" style="border-color:#7a3a32;color:#ff9a8c">⏹ 退出</button>
+     <span class="spsp" id="specRound"></span></div>`;
+  document.body.appendChild(d); renderSpecBtns();
+}
+function removeSpectatorPanel(){ const d=document.getElementById&&document.getElementById('specPanel'); if(d&&d.remove)d.remove(); }
+function setBar(frac,label){ const b=document.getElementById&&document.getElementById('specBar'); if(b&&b.style)b.style.width=Math.max(0,Math.min(1,frac))*100+'%';
+  const s=document.getElementById&&document.getElementById('specStat'); if(s)s.textContent=label?(' · '+label):''; }
+function renderSpecBtns(){ if(typeof document==='undefined')return;
+  const pb=document.getElementById('specPauseBtn'); if(pb)pb.textContent=SPEC&&SPEC.paused?'▶ 继续':'⏸ 暂停';
+  [['spd1',1],['spd2',2],['spd0',0]].forEach(([id,s])=>{ const e=document.getElementById(id); if(e)e.className=(SPEC&&SPEC.speed===s)?'on':''; });
+  const rd=document.getElementById('specRound'); if(rd&&G&&G.spectate)rd.textContent='第 '+G.round+'/'+G.maxRound+' 回合';
+}
+function highlightActor(p){ if(typeof document==='undefined')return;
+  const dot=document.getElementById('specDot'); if(dot&&dot.style)dot.style.color=pcolor(p.idx);
+  const a=document.getElementById('specActor'); if(a){ a.textContent=p.name; if(a.style)a.style.color=pcolor(p.idx); }
+  renderSpecBtns(); }
+function showSpeech(p,phase,obj){ if(typeof document==='undefined')return;
+  if(phase==='pre'){ const el=document.getElementById('specPre'); if(el)el.innerHTML=obj&&obj.main?('<span class="splbl">🤔 思考中</span>'+esc(obj.main)):''; return; }
+  const el=document.getElementById('specPost'); if(!el)return;
+  if(!obj){ el.innerHTML=''; return; }
+  const chips=(obj.delta||[]).map(d=>`<span class="spchip ${d.vp?'vp':(d.up?'up':'dn')}">${esc(d.label)}</span>`).join('');
+  el.innerHTML='<span class="splbl">✅ 发生了</span>'+esc(obj.main||'')+(chips?('<div>'+chips+'</div>'):'')
+    +(obj.extra?('<div class="spextra">'+esc(obj.extra)+'</div>'):'')
+    +(obj.lesson?('<div class="splesson">💡 启示：'+esc(obj.lesson)+'</div>'):'');
+  renderSpecBtns();
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+/* ---- 解说内容库 ---- */
+const NARRATION={
+ _default:{ pre:["{name} 在盘算下一步，看它资源和盘面，应该会做点实在的。"], post:["{name} 完成了一步。"] },
+ launch:{ pre:[
+  "{name} 信用够、场上才 {probes} 个探测器，下一步八成【发射】——没探测器就什么都飞不了，先把行动单位铺出去。",
+  "我猜【发射】：SETI 是‘探测器越多、能同时做的事越多’的滚雪球，早铺早赚。",
+  "{name} 大概率发射，{probes} 个探测器行动面太窄，花 2 信用多开一条线。"],
+  post:[
+  "{name} 花 2 信用【发射】，新探测器落在地球，共 {probes} 个。启示：发射不得分，却是一切的入场券——开局别憋大招，先有探测器在场。",
+  "{name} 把探测器放上地球。启示：所有探测器都从地球出发，离目标越远越要早发射早动身，不然太阳系一转你就更远了。"]},
+ orbit:{ pre:[
+  "{name} 探测器在 {planet}，环绕拿 {res} 不亏，还触发收入动作；它资源偏紧，我猜环绕补给。",
+  "首环绕分被拿了，{name} 环绕 {planet} 更多是攒‘轨道器’——金板配对和部分任务数轨道器，囤着有终局价值。"],
+  post:[
+  "{name} 环绕 {planet}（-1信用-1能量），吃到 {res}，轨道器+1。启示：环绕不只为分——给资源、给收入动作、攒轨道器资产；且‘先绕后落’让这颗星着陆便宜 1 能量。",
+  "{name} 又添一个轨道器（共 {orbits} 个）。启示：轨道器是终局会变分的资产；资源荒时环绕一颗星补给是很稳的过渡手。"]},
+ land:{ pre:[
+  "{name} 探测器稳停 {planet}、能量够——要【着陆】收割了！着陆给 {pts} 分加一个黄色痕迹，飞那么远就为这一下。",
+  "重头戏：{name} 大概率着陆 {planet}，外圈分高（{pts} 分）+黄痕迹推进外星发现，又拿分又攒发现。"],
+  post:[
+  "{name} 着陆 {planet}！花 {cost} 能量，{pts} 分 + {res} + 1 黄色痕迹。启示：着陆是探测器的终极变现，越外圈分越高，把探测器飞到外圈再落地是主得分引擎。",
+  "{name} 落地 {planet}，{pts} 分入账。启示：‘先环绕后着陆’同一颗星省 1 能量又两次吃奖励，是高手基本功；黄痕迹记得标到你想发现的物种上。"]},
+ scan:{ pre:[
+  "{name} 能量够（{energy}）、电脑还缺数据，我赌【扫描】：标 {sector} 扇区顺手拿数据，没数据后面分析、做任务全卡。",
+  "{name} 八成扫描——补数据，且 {sector} 扇区要是能标最多，结算拿粉色痕迹，是外星发现的硬通货。"],
+  post:[
+  "{name} 扫描 {sector}（-1信用-2能量），吃数据并占住扇区身位。启示：扫描=花能量换数据+占扇区身位；能量攒到 2 又缺数据就果断扫，优先补能+2分的那格。",
+  "{name} 扫描把 {sector} 自己的标记顶到 {myCount} 个（对手 {rivalCount}）。启示：扫描更是为扇区结算卡位——自己领先就追加锁死，落后太多就换扇区别陪跑。"]},
+ analyze:{ pre:[
+  "{name} 电脑顶行满了、有能量，很可能【分析】：花 1 能量清空整台电脑换 1 蓝色痕迹，凑外星三色。",
+  "顶行满+能量够，时机刚好。预测分析：1 能量很便宜，回报是蓝痕迹+清空让格子奖励再吃一轮。"],
+  post:[
+  "{name} 花 1 能量分析，电脑全清，拿 1 蓝色痕迹。启示：蓝痕迹是外星三色（黄着陆/粉赢扇区/蓝分析）之一，想拿外星卡就得留一条分析线产蓝痕迹。",
+  "电脑清空，顶行格子奖励下轮还能再吃一遍。启示：电脑流节奏是‘填满→分析→再填满’，转得越快白嫖的格子奖励越多。"]},
+ research:{ pre:[
+  "{name} 攒到 {publicity} 公关，八成去【研究】——开『{techType}』系首取直接 +2 分，便宜不占白不占。",
+  "公关够了，{name} 这步像研究：买能力+开分+转盘三合一，但它得算好太阳系旋转会不会坑到自己的航线。"],
+  post:[
+  "{name} 花 6 公关研究『{tech}』，首取『{techType}』+2 分，顺手转太阳系一格。启示：每系第一张都有 +2 分，开局优先三系各开一张白捡分；研究会转盘，想去外圈先飞再研究。"]},
+ card:{ pre:[
+  "{name} 信用够付 {cost}，我猜出『{card}』：{ev}——白区效果常一步顶两步，比单纯花资源做基础动作划算。",
+  "这张『{card}』自带连锁，等于一张卡换一个动作还不占基础资源，资源紧时是救命稻草。"],
+  post:[
+  "{name} 打出『{card}』(-{cost}信用)，触发 {fx}。启示：手里有能‘顺手做别的动作’的牌，别只盯基础动作——打牌经常更省更快。",
+  "『{card}』下场。启示：某资源紧又想做某动作时，先翻手牌有没有卡能直接帮你做掉，往往比硬掏资源便宜。"]},
+ pass:{ pre:[
+  "{name} 资源不够大动作（信用{credits}/能量{energy}），可能【跳过】攒资源；作为首位 pass 还会触发太阳系旋转，它在权衡这副作用。",
+  "{name} 没划算的主行动了，与其勉强做亏本操作不如 pass 一手蓄力。"],
+  post:[
+  "{name} 跳过蓄力。启示：pass 不丢人！没好动作时硬做亏本操作才亏；攒够一次做成首环绕+3/首着陆得痕迹，比零敲碎打值——看它下回合的大动作就懂了。"]},
+ 'event:firstOrbit':{ pre:[
+  "{name} 探测器已站上 {planet} 且没人环绕过——【环绕】抢首杀几乎必然！首环绕 {planet} 直接 +3 分加奖励，没人会让。",
+  "关键：{name} 就冲着 {planet} 的‘首环绕+3分’来的——抢首杀就是抢分差，先到先得没理由犹豫。"],
+  post:[
+  "{name} 环绕 {planet} 抢到首环绕 +3 分，还拿 {res}！启示：每颗行星的‘第一个环绕’是 +3 分大红包——你探测器在没人碰过的行星上时，优先环绕抢这笔。",
+  "首杀到手！{name} 成 {planet} 第一个轨道器。启示：盘面上‘还没被环绕’的行星就是限时悬赏，规划航线把它们当高优先目标；环绕后同星着陆还便宜 1 能量。"]},
+ 'event:firstLand':{ pre:[
+  "{planet} 还没人着陆过——{name} 落下去就是‘首个着陆’额外 +1 数据，探测器在位、能量够，多半抢这首杀。"],
+  post:[
+  "{name} 拿下 {planet} 首个着陆——{pts} 分+首着陆额外 1 数据+黄痕迹一气呵成。启示：没人碰过的行星是双重悬赏（首环绕+3、首着陆+1数据），优先飞过去。"]},
+ 'event:discover':{ pre:[
+  "临门一脚！【{species}】已经 2/3 色就差这一枚{color}痕迹。{name} 几乎一定补上——这一标直接翻面发现，贡献者拿 {bonus} 加外星卡，绝不能让对手抢身位。"],
+  post:[
+  "砰！{name} 补上{color}痕迹，【{species}】三色集齐被发现，贡献者各拿 {bonus}，还领 2 张外星卡并激活被动「{passive}」。启示：盯住 2/3 色的物种就是盯一笔大钱，你能补的那刻别犹豫——发现奖励+外星卡+被动一次到账，外星卡比普通卡强。"]}
+};
+/* ===================== /spectate ===================== */
 
 /* AI 子选择 */
 function aiPickSectorAny(p,cands){
@@ -2924,7 +3230,7 @@ const SAVE_KEY='seti_save_v1';
 function _noUnderscore(k,v){ return (k && k.charAt(0)==='_')?undefined:v; }   // 跳过 _ 开头的瞬态/动画/快照字段
 function snapState(){ try{ return JSON.stringify(G,_noUnderscore); }catch(e){ return null; } }
 function saveGame(){
-  if(SIM||!G||G.over)return;
+  if(SIM||!G||G.over||G.spectate)return;   // 🎙️ 观战局不入存档、不冒"继续对局"
   try{
     const meta={round:G.round, maxRound:G.maxRound, mode:G.mode, np:G.players.length, ts:Date.now()};
     localStorage.setItem(SAVE_KEY, JSON.stringify({meta, state:snapState()}));
@@ -3629,7 +3935,7 @@ function renderActions(){
     <button class="act${gl('analyze')}" data-act="analyze" ${dis||!computerTopFull(p)||p.energy<1?'disabled':''} ${lk('analyze')} onclick="actAnalyze()">💾 分析数据<br><span class="small muted">1能量</span></button>
     <button class="act${gl('card')}" data-act="card" ${dis||p.hand.length===0?'disabled':''} ${lk('card')} onclick="actPlayCardPrompt()">🃏 打出卡牌</button>
     <button class="act${gl('research')}" data-act="research" ${dis||p.publicity<6||availTechs(p).length===0?'disabled':''} ${lk('research')} onclick="actResearchPrompt()">🔬 研究科技<br><span class="small muted">6公关</span></button>
-    ${G.pluto?`
+    ${(G.pluto&&p.pluto)?`
     <button class="act" data-act="plutoOrbit" ${dis||!canPlutoOrbit(p)?'disabled':''} onclick="actOrbitPluto()" title="冥王星促销：最外环有探测器即可环绕（每人限1次）">🌑 环绕冥王星<br><span class="small muted">1信用+1能量${p.pluto&&p.pluto.orb?' ✓已环绕':''}</span></button>
     <button class="act" data-act="plutoLand" ${dis||!canPlutoLand(p)?'disabled':''} onclick="actLandPluto()" title="冥王星促销：最外环有探测器即可着陆（每人限1次）">🌑 着陆冥王星<br><span class="small muted">${plutoLandCost(p)}能量${p.pluto&&p.pluto.land?' ✓已着陆':''}</span></button>`:''}
     <button class="act primary${gl('pass')}" data-act="pass" ${dis?'disabled':''} ${lk('pass')} onclick="actPass()">⏭ 跳过(结束回合)</button>
@@ -3756,8 +4062,14 @@ function showFinal(){
   const winners=ps.filter(p=>p.vp===maxVp);
   const youWin=winners.indexOf(ps[0])>=0;
   SFX.play(youWin?'win':'lose');
-  // 战绩记录：仅真实对局、每局一次（教程/剧情不计）
-  if(!G._recorded && !G._tut && !_storyTut){
+  // 🎙️ 观战：赛后复盘解说 + 不记战绩
+  if(G.spectate && SPEC){
+    const w=winners[0]; const T={name:pname(w.idx)};
+    showSpeech(w,'post',{main:fillTokens('本局结束！{name} 胜出。复盘三条主线：① 收入卡滚雪球——前期多塞收入卡，资源越滚越多；② 抢首杀——盘面上没人碰过的行星，首环绕+3分、首着陆+1数据，优先去；③ 凑里程碑金板 + 早发现外星拿外星卡加速。看懂这三点，你上手就不亏。',T),lesson:'',extra:'',delta:[]});
+    setBar(1,'对局结束'); const a=document.getElementById&&document.getElementById('specActor'); if(a)a.textContent='🏁 赛后复盘';
+  }
+  // 战绩记录：仅真实对局、每局一次（教程/剧情/观战不计）
+  if(!G._recorded && !G._tut && !_storyTut && !G.spectate){
     G._recorded=true;
     const oppMode = (ps.length===2 && ps[1].isAI) ? ps[1].aiMode : null;
     const isDraw = youWin && winners.length>1;        // 你与他人并列第一 = 平局
