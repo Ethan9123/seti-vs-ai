@@ -1119,7 +1119,8 @@ function startScreen(){
    <button class="opt primary" style="margin:0" onclick="newGame(classicOpts())">🎮 经典模式（${_selNumP} 人 · 5 回合）${_selExpansion?'· 含扩展':''}</button>
    <button class="opt gold" style="margin:0" onclick="orgPickScreen()">🏢 组织模式（2 人 · 选择组织）</button>
    <button class="opt gold" style="margin:0" onclick="startStoryTutorial()">🎬 剧情教程（手把手通关一局，零基础必玩）</button>
-   <button class="opt" style="margin:0" onclick="startTutorial()">📖 界面速览（快速看一遍界面）</button></div>
+   <button class="opt" style="margin:0" onclick="startTutorial()">📖 界面速览（快速看一遍界面）</button>
+   <button class="opt" style="margin:0" onclick="showCardDex()">🗂 卡牌图鉴（浏览全部 200 张卡牌，开局前先看看）</button></div>
    ${statsSummaryHTML()}`;
   $('modalbg').style.display='flex';
 }
@@ -1318,8 +1319,8 @@ function alienToken(p, ev, ctx){
       }
     } else if(key==='oumuamua'){       // 外星化石经济：分析→得化石并立即标记1信号（化石不留终局）
       if(ev==='analyze'){ T.exofossil=(T.exofossil||0)+1; const c=['y','r','b','k'][(T.exofossil)%4]; markByColor(p,c); log3(p,'奥陌陌：分析提取外星化石，标记1个信号。'); }
-    } else if(key==='anomalies'){      // 幽光异象：每次太阳系旋转 → 异象标记(+1公关+1移动)，终局每个+2分
-      if(ev==='rotate'){ T.anomaly=(T.anomaly||0)+1; gain(p,{publicity:1},true); p.pendingMoves+=1; }
+    } else if(key==='anomalies'){      // 幽光异象：每次太阳系旋转，地球对齐异象→领取该列奖励(数据核/2公关/1信用 轮转，忠实于真实异象奖励)，终局每个+2分
+      if(ev==='rotate'){ const rw=[{data:1},{publicity:2},{credits:1}][(T.anomaly||0)%3]; T.anomaly=(T.anomaly||0)+1; gain(p,rw,true); }
     } else if(key==='amoeba'){         // 变形虫：打牌/分析 → 细胞器(+1数据)，终局每个+1分
       if(ev==='card'||ev==='analyze'){ T.organelle=(T.organelle||0)+1; gain(p,{data:1},true); }
     } else if(key==='arkhos'){         // 阿尔科斯：每次环绕 → 防卫层 + 探索奖励，终局每个+2分
@@ -3012,6 +3013,15 @@ function renderMap(){
   svg+=`<circle cx="${CX}" cy="${CY}" r="${TRACK}" fill="none" stroke="#1a4e8c" stroke-width="13" stroke-dasharray="2 7" opacity=".55"/>`;
   // 金色里程碑标记
   [25,50,70].forEach((m,i)=>{ const a=(-90+(m/100)*360)*Math.PI/180; const x=CX+TRACK*Math.cos(a),y=CY+TRACK*Math.sin(a); svg+=`<circle cx="${x}" cy="${y}" r="6" fill="#f5cd6a" stroke="#7a5800"/>`; });
+  // 半人马「讯息里程碑」：每位发现者的待领格在分数轨上画 📡（模拟讯息发出后需 +15 分时延才返回）
+  const trackXY=(score)=>{ const a=(-90+(Math.min(score,100)/100)*360)*Math.PI/180; return [CX+TRACK*Math.cos(a), CY+TRACK*Math.sin(a)]; };
+  G.players.forEach(p=>{ if(p.msgBase===undefined)return;
+    for(let k=(p.msgClaimed||0); k<CENT_MSG_REWARDS.length; k++){ const target=p.msgBase+15*(k+1); if(target>100)break;
+      const [x,y]=trackXY(target);
+      svg+=`<g><title>${pname(p.idx)} 的待返回讯息：到达 ${target} 分时领取奖励</title><circle cx="${x}" cy="${y}" r="7.5" fill="#0a1530" stroke="${pcolor(p.idx)}" stroke-width="2"/><text x="${x}" y="${y+3.3}" text-anchor="middle" font-size="9">📡</text></g>`; }
+  });
+  // 玩家当前得分位置（小圆点，便于看清离里程碑/讯息还差多少）
+  G.players.forEach(p=>{ const [x,y]=trackXY(p.vp); svg+=`<circle cx="${x}" cy="${y}" r="4.5" fill="${pcolor(p.idx)}" stroke="#04101f" stroke-width="1.4"><title>${pname(p.idx)}：${p.vp} 分</title></circle>`; });
   // 轨道环
   for(let r=0;r<3;r++){ svg+=`<circle cx="${CX}" cy="${CY}" r="${RR[r]}" fill="none" stroke="#2a4a82" stroke-width="1.3" opacity=".75"/>`; }
   // 太阳 + 光晕 + 小行星带质感
@@ -3388,12 +3398,13 @@ function _dexListOnly(){
 function _dexSet(k,v){_dex[k]=v; _renderDexShell();}
 function _renderDexShell(){
   const btn=(k,v,lbl)=>`<button class="small ${_dex[k]===v?'gold':''}" onclick="_dexSet('${k}','${v}')">${_dex[k]===v?'✓':''}${lbl}</button>`;
+  const nB=(window.REALCARDS||[]).length, nS=(window.SA_CARDS||[]).length, nQ=(window.QUICKSTART_CARDS||[]).length;
   $('modal').innerHTML=`<h2>🗂 卡牌图鉴 · Card Explorer</h2>
-   <div class="small muted" style="margin-bottom:8px">浏览全部 200 张卡牌（基础 137 + 扩展 SA 42 + 快速开始 21），按来源 / 扇区色 / 自由行动 / 名称筛选。对应官网 <b>seti.ender-wiggin.com</b> 的 Card Explorer。</div>
+   <div class="small muted" style="margin-bottom:8px">浏览全部 ${nB+nS+nQ} 张卡牌（基础 ${nB} + 扩展 SA ${nS} + 快速开始 ${nQ}），按来源 / 扇区色 / 自由行动 / 名称筛选。对应官网 <b>seti.ender-wiggin.com</b> 的 Card Explorer。</div>
    <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">来源</span>${btn('src','all','全部')}${btn('src','base','基础')}${btn('src','sa','扩展SA')}${btn('src','qs','快速开始')}</div>
      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">扇区</span>${btn('col','all','全部')}${btn('col','r','🔴红')}${btn('col','b','🔵蓝')}${btn('col','y','🟡黄')}${btn('col','k','⚫黑')}</div>
-     <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">角标</span>${btn('cor','all','全部')}${btn('cor','credits','信用')}${btn('cor','energy','能量')}${btn('cor','publicity','公关')}${btn('cor','move','移动')}${btn('cor','data','数据')}${btn('cor','card','随机卡')}</div>
+     <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">角标</span>${btn('cor','all','全部')}${btn('cor','publicity','公关')}${btn('cor','move','移动')}${btn('cor','data','数据')}</div>
      <div style="display:flex;gap:5px;align-items:center"><span class="small muted" style="width:42px">搜索</span><input id="dexQ" value="${_dex.q.replace(/"/g,'&quot;')}" oninput="_dex.q=this.value;_dexListOnly()" placeholder="卡名 / 编号 / 关键词…" style="flex:1;background:#0a1428;border:1px solid #2a3f6a;border-radius:7px;color:#e8eefc;padding:5px 8px;font-size:12px"></div>
    </div>
    <div id="dexList" style="max-height:58vh;overflow:auto;padding-right:4px"></div>
@@ -3442,7 +3453,7 @@ function alienMechHint(key){
   switch(key){
     case 'mascamites': return '🧪 样本运输：在木星/土星 环绕或着陆→采样兑奖；终局每样本 +1分';
     case 'oumuamua':   return '🪨 星际访客：每次分析→提取外星化石并标1信号；分析额外 +3分';
-    case 'anomalies':  return '🌀 幽光异象：每次太阳系旋转→异象标记(+1公关+1移动)；终局每个 +2分';
+    case 'anomalies':  return '🌀 幽光异象：每次太阳系旋转，地球对齐异象→领取该列奖励(数据核/2公关/1信用 轮转)；终局每个 +2分';
     case 'amoeba':     return '🦠 太空变形虫：每次打牌/分析→细胞器(+1数据)；终局每个 +1分';
     case 'arkhos':     return '🛡 阿尔科斯：每次环绕→防卫层(数据/信用/分)；终局每个 +2分';
     case 'glyphids':   return '🔣 格利菲德：从信号(按色)/环绕/着陆/研究 收集不同字符；终局按字符"种类数"递增计分';
