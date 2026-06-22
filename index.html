@@ -254,6 +254,7 @@
         <button class="small gold" onclick="startTutorial()">📖 教程</button>
         <button class="small" onclick="showCheatSheet()">📋 速查</button>
         <button class="small" onclick="showStrategy()">📈 攻略</button>
+        <button class="small" onclick="showCardDex()" title="卡牌图鉴：浏览/筛选全部 200 张卡牌（基础+扩展+快速开始）">🗂 图鉴</button>
         <button class="small" onclick="showPlanetaryBoard()">🪐 行星板</button>
         <button class="small" onclick="showRealBoard()">真实棋盘</button>
         <button class="small" onclick="undoTurn()" title="撤销本回合的操作，回到回合开始（自动存档，刷新/关页不丢局）">↶ 悔棋</button>
@@ -843,7 +844,7 @@ function freshPlayer(name,isAI,color){
     alienTokens:{},       // 外星道具计数 {sample:n, exofossil:n, ...}
     alienMsgDone:false,   // 半人马信息是否已破译
     markedSectors:{},     // 曾标记过信号的扇区集合（终局计分用）
-    income:{credits:3,energy:2,card:1}, // 起始收入卡（回合2起）
+    income:{credits:2,energy:1,card:1}, // 基础收入（回合2起）——已下调以还原"资源紧张"，主要靠塞收入卡攒
     incomeCards:[],       // 已塞入的收入卡 {type}
     missions:[],          // 进行中的条件任务卡
     trigMissions:[],      // 进行中的可触发任务 {card,ev,planets,reward,left}
@@ -899,7 +900,7 @@ function newGame(opts){
   // 组织模式（仅 2 人）：分别套用组织
   if(orgMode){ applyOrg(you,ORGS[opts.youOrg]); applyOrg(players[1],ORGS[opts.aiOrg]); }
   // 每个 Rival AI 的起始加成（按难度）
-  players.forEach(p=>{ if(p.isAI && p.aiMode==='rival'){ const rd=p.rivalDiff; p.credits+=rd*2; p.energy+=rd; p.publicity=clamp(Math.max(p.publicity+rd,4),0,10); p.income={credits:3+Math.floor(rd/2),energy:2+Math.floor(rd/2),card:1}; } });
+  players.forEach(p=>{ if(p.isAI && p.aiMode==='rival'){ const rd=p.rivalDiff; p.credits+=rd*2; p.energy+=rd; p.publicity=clamp(Math.max(p.publicity+rd,4),0,10); p.income={credits:2+Math.floor(rd/2),energy:1+Math.floor(rd/2),card:1}; } });
   // 起始手牌（组织模式前两位按组织设定，否则 5 张）
   players.forEach((p,i)=>{ const n=(orgMode&&i<2)?ORGS[i===0?opts.youOrg:opts.aiOrg].start.cards:5; for(let j=0;j<n;j++) p.hand.push(deck.pop()); });
   const rivalDiff = (oppList[0]&&oppList[0].aiMode==='rival') ? clamp(oppList[0].rivalDiff||3,1,5) : 0;
@@ -984,6 +985,7 @@ function resolveQuickStart(p,card){
   log3(p,'结算快速开始卡『'+card.name+'』。');
 }
 function runQuickStart(done){
+  G._noUI=1;   // 快速开始卡结算阶段：即时处理（下个 scheduleTurn 解除）
   const pool=shuffle(window.QUICKSTART_CARDS.slice());
   const youDeal=[pool.pop(),pool.pop(),pool.pop()];
   const aiDeal=[pool.pop(),pool.pop(),pool.pop()];
@@ -1188,7 +1190,7 @@ function gain(p,fx,silent){
   if(fx.publicity){p.publicity=clamp(p.publicity+fx.publicity,0,10);}
   if(fx.vp){p.vp+=fx.vp; checkMilestonesLater(p);}
   if(fx.data){ addData(p,fx.data); }
-  if(fx.card){ for(let i=0;i<fx.card;i++) drawCard(p); }
+  if(fx.card){ takeOrDraw(p,fx.card); }
   if(fx.move){ p.pendingMoves+=fx.move; }
   if(fx.trace){ gainTrace(p,fx.trace); }
   if(fx.launchFree){ doLaunch(p,true); }
@@ -1211,26 +1213,81 @@ function drawFromRow(p,idx){
   G.cardRow[idx]= G.deck.length? G.deck.pop() : (G.deck=shuffle(G.discard.splice(0)),G.deck.pop());
 }
 
-/* 生命痕迹：type=land/win/analyze */
+/* 生命痕迹：type=land/win/analyze
+   忠实玩法：拿到痕迹时，玩家亲手把它标到【某个在场物种】(推进该物种发现)或【通用痕迹格】，不同位置奖励不同。
+   人类：延迟到本次主行动结束(endMain/scan done)时用弹窗交互放置；AI/SIM/教程：立即贪心放置。 */
+// 仅在「人类自己的可交互回合」延迟到 endMain 用弹窗结算；回合结束/跳过/快速开始阶段(_noUI)与 AI/SIM/教程一律即时
+function deferUI(p){ return !SIM && !p.isAI && !G._tut && !G._noUI && p.idx===0 && G.active===0 && !p.passed; }
 function gainTrace(p,type){
-  // 找一个该类型仍空的外星槽
-  let placed=false;
-  for(const al of G.aliens){
-    if(!al.revealed && al.slots[type]===null){
-      al.slots[type]= p.idx;
-      p.traces[type]++;
-      gain(p,{publicity:1},true); p.vp+=5; checkMilestonesLater(p);
-      log3(p,'标记了一处生命痕迹（'+traceName(type)+'），+5分+1公关。');
-      placed=true;
-      maybeDiscover(al);
-      break;
+  if(deferUI(p)){ p._pendTrace=p._pendTrace||[]; p._pendTrace.push(type); return; }
+  placeTraceNow(p,type,aiPickTrace(p,type));
+}
+function takeOrDraw(p,n){
+  if(deferUI(p)){ p._pendCards=(p._pendCards||0)+n; return; }
+  for(let i=0;i<n;i++) drawCard(p);
+}
+function speciesTraceRwd(type){ return type==='land'?{vp:5,data:1}:type==='win'?{vp:5,publicity:1}:{vp:5,data:1}; }
+function overflowTraceRwd(type){ G.overflowUsed=G.overflowUsed||{}; const n=G.overflowUsed[type]||0; const seq=[3,3,2,2,1]; return {vp:(n<seq.length?seq[n]:1)}; }
+function buildTraceOpts(p,type){
+  const opts=[];
+  for(const al of G.aliens){ if(!al.revealed && al.slots[type]===null) opts.push({kind:'species',al,rwd:speciesTraceRwd(type)}); }
+  opts.push({kind:'overflow',rwd:overflowTraceRwd(type)});
+  return opts;
+}
+function rwdScore(r){ return (r.vp||0)+(r.data||0)*0.6+(r.publicity||0)*0.5+(r.card||0)*0.7+(r.credits||0)*0.7+(r.energy||0)*0.7; }
+function rwdText(r){ const o=[]; if(r.vp)o.push('+'+r.vp+'分'); if(r.data)o.push('+'+r.data+'数据'); if(r.publicity)o.push('+'+r.publicity+'公关'); if(r.card)o.push('+'+r.card+'卡'); if(r.energy)o.push('+'+r.energy+'能量'); if(r.credits)o.push('+'+r.credits+'信用'); return o.join(' ')||'无奖励'; }
+function aiPickTrace(p,type){
+  const opts=buildTraceOpts(p,type); let best=opts[0],bs=-1e9;
+  for(const o of opts){
+    let s=rwdScore(o.rwd);
+    if(o.kind==='species'){ s+=3; const al=o.al; const filled=['land','win','analyze'].filter(t=>al.slots[t]!==null).length;
+      if(filled===2) s+=6; else if(filled===1) s+=1.5;
+      // 略偏好对自己有利/想要的物种被动（简单：均等）
     }
+    if(s>bs){bs=s;best=o;}
   }
-  if(!placed){
-    // 溢出 +3 分
-    p.traces[type]++; p.vp+=3; checkMilestonesLater(p);
-    log3(p,'生命痕迹（'+traceName(type)+'）记入溢出区，+3分。');
+  return best;
+}
+function placeTraceNow(p,type,choice){
+  if(!choice){ p.traces[type]++; p.vp+=3; checkMilestonesLater(p); return; }
+  if(choice.kind==='species'){
+    choice.al.slots[type]=p.idx; p.traces[type]++;
+    gain(p,choice.rwd,true);
+    log3(p,'在【'+choice.al.name+'】标记'+traceName(type)+'痕迹（'+rwdText(choice.rwd)+'），推进物种发现。');
+    maybeDiscover(choice.al);
+  } else {
+    G.overflowUsed=G.overflowUsed||{}; G.overflowUsed[type]=(G.overflowUsed[type]||0)+1;
+    p.traces[type]++; gain(p,choice.rwd,true);
+    log3(p,'在通用痕迹格标记'+traceName(type)+'（'+rwdText(choice.rwd)+'）。');
   }
+}
+// 异步拿牌：人类可从中央 3 张明牌行挑，或盲抽牌库（每次一张）
+function takeCards(p,n,after){
+  if(n<=0){ after&&after(); return; }
+  const step=(k)=>{
+    if(k>=n){ after&&after(); return; }
+    const avail=[0,1,2].filter(i=>G.cardRow[i]);
+    if(!avail.length){ drawCard(p); step(k+1); return; }
+    modalChoose('拿牌（第 '+(k+1)+'/'+n+' 张）：从桌面明牌挑一张，或盲抽牌库',
+      avail.map(i=>({v:i,c:G.cardRow[i],sub:'拿这张进手牌'})).concat([{v:-1,label:'🎲 盲抽牌库 1 张',sub:'从牌库随机'}]),
+      v=>{ if(v===-1)drawCard(p); else drawFromRow(p,v); renderAll(); step(k+1); }, {cards:true});
+  };
+  step(0);
+}
+// 主行动结束时，依次结算人类待放置的痕迹与待拿的卡牌（带交互），完成后回调
+function drainUI(p,after){
+  if(p._pendTrace && p._pendTrace.length){
+    const type=p._pendTrace.shift();
+    const opts=buildTraceOpts(p,type);
+    if(opts.length===1){ placeTraceNow(p,type,opts[0]); renderAll(); drainUI(p,after); return; }
+    modalChoose('🧬 放置生命痕迹（'+traceName(type)+'）：选择标记到哪里',
+      opts.map((o,i)=>({v:i, label:(o.kind==='species'?('🛸 标到【'+o.al.name+'】　'+rwdText(o.rwd)+'　→ 推进该物种发现'):('▫ 通用痕迹格　'+rwdText(o.rwd)))})),
+      v=>{ placeTraceNow(p,type,opts[v]); renderAll(); drainUI(p,after); },
+      {cancelLabel:'自动放置', onCancel:()=>{ placeTraceNow(p,type,aiPickTrace(p,type)); renderAll(); drainUI(p,after); }});
+    return;
+  }
+  if(p._pendCards>0){ const n=p._pendCards; p._pendCards=0; takeCards(p,n,()=>drainUI(p,after)); return; }
+  after();
 }
 function traceName(t){return t==='land'?'登陆·黄':t==='win'?'胜利·红':'分析·蓝';}
 // 生成一张外星卡（带 alien 标记与所属物种颜色）
@@ -2068,6 +2125,7 @@ function youCompleteMissions(){
   }
   if(!any)toast('当前没有满足条件的任务。');
   renderAll();
+  if(any) drainUI(p, ()=>renderAll());   // 任务奖励若含痕迹/卡牌，自由行动也可立即交互放置/拿取
 }
 
 /* ===========================================================
@@ -2127,12 +2185,17 @@ function awardGold(p){
    回合 / 轮次流程
    =========================================================== */
 function endMain(){
-  // 主行动结束 → 处理里程碑/发现 → 下一玩家
+  // 主行动结束 → 处理里程碑/发现 → 结算待放置痕迹&待拿卡（人类交互）→ 下一玩家
   resolveMilestones();
   G.players[0].pendingMoves=0; // 简化：移动点不跨回合保留（除被动）
   renderAll();
   if(G.over)return;
-  nextPlayer();
+  drainUI(G.players[0], ()=>{
+    resolveMilestones();
+    renderAll();
+    if(G.over)return;
+    nextPlayer();
+  });
 }
 function nextPlayer(){
   if(allPassed()){ endRound(); return; }
@@ -2144,6 +2207,7 @@ function nextPlayer(){
   scheduleTurn();
 }
 function scheduleTurn(){
+  G._noUI=0;                 // 新回合开始 → 解除"非交互结算"封锁
   if(SIM)return;
   const p=G.players[G.active];
   if(p && p.isAI && !p.passed) setTimeout(aiTurn,600);
@@ -2160,6 +2224,7 @@ function actPass(){
 }
 function handLimitFree(p,c){ return c.alien==='exertians' && p.alienSpecies && p.alienSpecies.includes('exertians'); }
 function doPass(p){
+  G._noUI=1;   // 跳过/回合结束结算阶段：人类的痕迹/卡牌即时处理，不弹交互（下个 scheduleTurn 解除）
   // 1) 弃到 4 张（埃克塞尔外星卡不计入手牌上限）
   const counted=p.hand.filter(c=>!handLimitFree(p,c)).length;
   const over=counted-4;
@@ -2213,6 +2278,7 @@ function endRoundCardChoice(p,done){
 }
 
 function endRound(){
+  G._noUI=1;   // 回合间收入结算：人类卡牌即时入手，不弹明牌选择（下个 scheduleTurn 解除）
   logS('—— 第 '+G.round+' 回合结束 ——');
   if(G.round>=G.maxRound){ endGame(); return; }
   // 回合间收入
@@ -3195,7 +3261,7 @@ function renderTrace(){
     `<span class="res"><i class="traceico t-analyze"></i>分析 ${p.traces.analyze}</span>`+
     `<span class="res">完成任务 ${p.completedMissions}</span>`;
   const inc={credit:0,energy:0,card:0}; p.incomeCards.forEach(x=>inc[x.type]++);
-  $('youIncome').innerHTML='收入卡：信用'+inc.credit+' 能量'+inc.energy+' 卡牌'+inc.card+'（每回合产出）。基础收入 +3信用+2能量+1卡。';
+  $('youIncome').innerHTML='收入卡：信用'+inc.credit+' 能量'+inc.energy+' 卡牌'+inc.card+'（每回合产出）。基础收入 +2信用+1能量+1卡（已下调，资源更紧张）。';
 }
 function renderMissions(){
   const p=G.players[0];
@@ -3275,6 +3341,67 @@ function showStrategy(){
   <div style="margin-top:10px"><button class="opt primary" onclick="closeModal()">明白了</button></div>`;
   $('modalbg').style.display='flex';
 }
+
+/* ===== 卡牌图鉴 / Card Explorer（对应官网 seti.ender-wiggin.com 的 Card Explorer）=====
+   纯展示层：把已加载的 REALCARDS(基础137)+SA_CARDS(扩展42)+QUICKSTART_CARDS(快速开始21)
+   汇总成可按 来源/扇区色/自由行动/名称 筛选的图鉴。不触碰任何对局/AI 逻辑。 */
+let _dex={src:'all',col:'all',cor:'all',q:''};
+function _dexAll(){
+  const out=[];
+  (window.REALCARDS||[]).forEach(c=>out.push({src:'base',id:'#'+c.n,name:c.name,cols:c.cols,cost:c.cost,inc:c.inc,corner:c.corner,fx:c.fx,note:c.note}));
+  (window.SA_CARDS||[]).forEach(c=>out.push({src:'sa',id:c.said,name:c.name,cols:c.cols,cost:c.cost,inc:c.inc,corner:c.corner,fx:c.fx,note:c.note}));
+  (window.QUICKSTART_CARDS||[]).forEach(c=>{const pk=c.place&&c.place.kind; const pn={trace:'放置·发现痕迹',orbiter:'放置·轨道器',signal:'放置·信号',none:'无放置'}[pk]||(pk||''); out.push({src:'qs',id:c.srid,name:c.name,cols:null,cost:null,inc:null,corner:null,fx:c.reward,note:pn});});
+  return out;
+}
+function _dexList(){
+  let list=_dexAll();
+  if(_dex.src!=='all') list=list.filter(c=>c.src===_dex.src);
+  if(_dex.col!=='all') list=list.filter(c=>c.cols&&c.cols.includes(_dex.col));
+  if(_dex.cor!=='all') list=list.filter(c=>c.corner===_dex.cor);
+  if(_dex.q){const q=_dex.q.trim().toLowerCase(); if(q) list=list.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.id||'').toLowerCase().includes(q)||(c.note||'').toLowerCase().includes(q));}
+  return list;
+}
+function _dexListOnly(){
+  const list=_dexList();
+  const srcLbl={base:'基础',sa:'扩展SA',qs:'快速开始'};
+  const srcCol={base:'#7fd0ff',sa:'#9b8cff',qs:'#54d18a'};
+  let h=`<div class="small muted" style="margin:6px 2px 8px">共 ${list.length} 张</div>
+   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:8px">`;
+  for(const c of list){
+    const eff=fxText(c.fx); const extra=(c.note&&c.note!==eff)?c.note:'';
+    h+=`<div style="background:#0b1733;border:1px solid #21345c;border-radius:9px;padding:8px 9px;font-size:11.5px">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+        <span style="font-weight:800;color:${srcCol[c.src]}">${c.id}</span>
+        <span class="scol-wrap">${c.cols?colSwatches(c.cols):''}</span>
+        ${c.cost!=null?`<span class="small muted" style="margin-left:auto">${c.cost}¢</span>`:`<span style="margin-left:auto" class="small muted">${srcLbl[c.src]}</span>`}
+      </div>
+      <div style="font-weight:700;color:#e8eefc;line-height:1.25;margin-bottom:3px">${c.name}</div>
+      ${(c.inc||c.corner)?`<div class="small muted" style="margin-bottom:2px">${c.inc?'收入:'+incName(c.inc):''}${c.inc&&c.corner?' · ':''}${c.corner?'角标:'+cornerName(c.corner):''}</div>`:''}
+      <div style="color:#bcd3f0">${eff||'—'}</div>
+      ${extra?`<div class="small muted" style="margin-top:2px">${extra}</div>`:''}
+    </div>`;
+  }
+  h+=`</div>`;
+  if(!list.length) h=`<div class="small muted" style="padding:20px;text-align:center">没有符合条件的卡牌，换个筛选试试。</div>`;
+  const el=$('dexList'); if(el) el.innerHTML=h;
+}
+function _dexSet(k,v){_dex[k]=v; _renderDexShell();}
+function _renderDexShell(){
+  const btn=(k,v,lbl)=>`<button class="small ${_dex[k]===v?'gold':''}" onclick="_dexSet('${k}','${v}')">${_dex[k]===v?'✓':''}${lbl}</button>`;
+  $('modal').innerHTML=`<h2>🗂 卡牌图鉴 · Card Explorer</h2>
+   <div class="small muted" style="margin-bottom:8px">浏览全部 200 张卡牌（基础 137 + 扩展 SA 42 + 快速开始 21），按来源 / 扇区色 / 自由行动 / 名称筛选。对应官网 <b>seti.ender-wiggin.com</b> 的 Card Explorer。</div>
+   <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
+     <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">来源</span>${btn('src','all','全部')}${btn('src','base','基础')}${btn('src','sa','扩展SA')}${btn('src','qs','快速开始')}</div>
+     <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">扇区</span>${btn('col','all','全部')}${btn('col','r','🔴红')}${btn('col','b','🔵蓝')}${btn('col','y','🟡黄')}${btn('col','k','⚫黑')}</div>
+     <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">角标</span>${btn('cor','all','全部')}${btn('cor','credits','信用')}${btn('cor','energy','能量')}${btn('cor','publicity','公关')}${btn('cor','move','移动')}${btn('cor','data','数据')}${btn('cor','card','随机卡')}</div>
+     <div style="display:flex;gap:5px;align-items:center"><span class="small muted" style="width:42px">搜索</span><input id="dexQ" value="${_dex.q.replace(/"/g,'&quot;')}" oninput="_dex.q=this.value;_dexListOnly()" placeholder="卡名 / 编号 / 关键词…" style="flex:1;background:#0a1428;border:1px solid #2a3f6a;border-radius:7px;color:#e8eefc;padding:5px 8px;font-size:12px"></div>
+   </div>
+   <div id="dexList" style="max-height:58vh;overflow:auto;padding-right:4px"></div>
+   <div style="margin-top:10px"><button class="opt primary" onclick="closeModal()">关闭</button></div>`;
+  _dexListOnly();
+}
+function showCardDex(){ _dex={src:'all',col:'all',cor:'all',q:''}; _renderDexShell(); $('modalbg').style.display='flex'; const q=$('dexQ'); if(q) q.focus(); }
+
 function renderTech(){
   const p=G.players[0];
   let h='';
@@ -3310,17 +3437,53 @@ function renderSectors(){
   });
   $('sectors').innerHTML=h;
 }
+// 各物种"忠实机制"的运行时状态（每位玩家）与机制提示——用于发现后在面板上呈现棋盘感
+function alienMechHint(key){
+  switch(key){
+    case 'mascamites': return '🧪 样本运输：在木星/土星 环绕或着陆→采样兑奖；终局每样本 +1分';
+    case 'oumuamua':   return '🪨 星际访客：每次分析→提取外星化石并标1信号；分析额外 +3分';
+    case 'anomalies':  return '🌀 幽光异象：每次太阳系旋转→异象标记(+1公关+1移动)；终局每个 +2分';
+    case 'amoeba':     return '🦠 太空变形虫：每次打牌/分析→细胞器(+1数据)；终局每个 +1分';
+    case 'arkhos':     return '🛡 阿尔科斯：每次环绕→防卫层(数据/信用/分)；终局每个 +2分';
+    case 'glyphids':   return '🔣 格利菲德：从信号(按色)/环绕/着陆/研究 收集不同字符；终局按字符"种类数"递增计分';
+    case 'heptapods':  return '🛸 七肢桶：每标1信号→语标(非线性轮转奖励)；终局按语标数递增计分';
+    case 'centaurians':return '📡 半人马讯息：每 +15分 领取下一格奖励（先到先得，模拟光年时延）';
+    case 'exertians':  return '☣ 埃克塞尔：抽到的外星卡含隐藏危险值；终局危险值唯一最高者扣总分 1/10';
+  }
+  return '';
+}
+function alienMechState(key,p){
+  const T=p.alienTokens||{};
+  switch(key){
+    case 'mascamites': return '样本×'+(T.sample||0);
+    case 'oumuamua':   return '化石×'+(T.exofossil||0);
+    case 'anomalies':  return '异象×'+(T.anomaly||0);
+    case 'amoeba':     return '细胞器×'+(T.organelle||0);
+    case 'arkhos':     return '防卫层×'+(T.security||0);
+    case 'glyphids':   return '字符 '+(p.glyphTypes?Object.keys(p.glyphTypes).length:0)+'/7种';
+    case 'heptapods':  return '语标×'+(T.logogram||0);
+    case 'centaurians':return '讯息 '+(p.msgClaimed||0)+'/4 已领'+(p.msgBase!==undefined?'（下一格≥'+(p.msgBase+15*((p.msgClaimed||0)+1))+'分）':'');
+    case 'exertians':  return '暗牌（危险值隐藏）';
+  }
+  return '—';
+}
 function renderAliens(){
   let h='';
   G.aliens.forEach((al,i)=>{
     const dot=(v)=>(typeof v==='number')?'<i class="traceico" style="background:'+pcolor(v)+'"></i>':v==='neu'?'<i class="traceico" style="background:#888"></i>':'<i class="traceico" style="background:#1a2c4e;border:1px solid #345"></i>';
     const sp=al.species, col=sp?sp.color:'#888';
-    h+=`<div class="alien" style="${al.revealed?'border-color:'+col+';box-shadow:0 0 12px '+col+'44':''}"><b style="${al.revealed?'color:'+col:''}">${al.revealed?'👽 '+al.name:'未知物种 '+(i+1)}</b>
+    const filled=['land','win','analyze'].filter(t=>al.slots[t]!==null).length;
+    h+=`<div class="alien" style="${al.revealed?'border-color:'+col+';box-shadow:0 0 12px '+col+'44':''}"><b style="${al.revealed?'color:'+col:''}">${al.revealed?'👽 '+al.name:'未知物种 '+(i+1)+'（'+filled+'/3 色）'}</b>
       <div class="small" style="margin-top:3px">
       <i class="traceico t-land"></i>登陆 ${dot(al.slots.land)}
       &nbsp;<i class="traceico t-win"></i>胜利 ${dot(al.slots.win)}
       &nbsp;<i class="traceico t-analyze"></i>分析 ${dot(al.slots.analyze)}</div>
-      ${al.revealed?'<div class="small" style="margin-top:4px;color:'+col+'">'+sp.pdesc+'</div>'+(sp.token?'<div class="small muted">道具'+sp.token.tdesc+'｜'+G.players.map(p=>pname(p.idx)+':'+(p.alienTokens[sp.token.key]||0)).join(' · ')+'</div>':'')+'<div class="muted small">发现奖励：'+al.bonus.desc+'</div>':'<div class="muted small" style="margin-top:3px">集齐三色→发现物种：激活专属被动+道具系统+外星卡</div>'}</div>`;
+      ${al.revealed?
+        '<div class="small" style="margin-top:4px;color:'+col+'">'+sp.pdesc+'</div>'+
+        '<div class="small muted" style="margin-top:2px;line-height:1.35">'+alienMechHint(sp.key)+'</div>'+
+        '<div class="small" style="margin-top:3px;background:#0e1c34;border-radius:5px;padding:3px 5px">'+G.players.map(p=>'<b style="color:'+pcolor(p.idx)+'">'+pname(p.idx)+'</b> '+alienMechState(sp.key,p)).join('　｜　')+'</div>'+
+        '<div class="muted small" style="margin-top:2px">发现奖励：'+al.bonus.desc+'</div>'
+        :'<div class="muted small" style="margin-top:3px">集齐 登陆/胜利/分析 三色 → 发现物种：激活专属被动 + 道具机制 + 外星卡</div>'}</div>`;
   });
   $('aliens').innerHTML=h;
 }
@@ -4000,7 +4163,7 @@ function showHelp(){
   <p><b>生命痕迹</b>：登陆→黄痕迹；扇区胜利→红痕迹；分析→蓝痕迹。集齐某外星物种的 登/胜/析 三格即可发现它，发现者获奖励。</p>
   <p><b>电脑</b>：自由行动「放置数据」从数据池放入电脑，触发格子效果(公关/塞收入/2分等)。顶行填满后可「分析数据」获得蓝痕迹并清空。电脑科技会扩展格子。</p>
   <p><b>里程碑</b>：达到 25/50/70 分可标记一块金色计分板(先到先得高倍率)；20/30 分触发中立标记推进外星发现。</p>
-  <p><b>收入</b>：回合之间获得基础收入(+3信用+2能量+1卡)及所有收入卡产出。把卡「塞入收入」可永久增加收入。</p>
+  <p><b>收入</b>：回合之间获得基础收入(+2信用+1能量+1卡)及所有收入卡产出。资源紧张，把卡「塞入收入」可永久增加收入，是滚雪球关键。</p>
   <hr style="border-color:#2a3b63">
   <p><b>真实卡牌（中文）</b>：本版使用来自 TTS 汉化 mod 的 <b>137 张官方 SETI 中文卡面</b>（图片即真实效果）。鼠标悬停看说明，点击手牌可放出/塞收入/弃取角标，点击卡牌行可放大查看。</p>
   <div style="background:rgba(8,18,40,.6);border:1px solid #2a3b63;border-radius:10px;padding:9px 12px;margin:6px 0">
