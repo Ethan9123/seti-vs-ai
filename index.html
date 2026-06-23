@@ -2900,10 +2900,11 @@ function startSpectate(cfg){
   if(brain==='rival'&&np>2)brain='neural';
   const oppList=[]; for(let k=0;k<np-1;k++) oppList.push({aiMode:brain,rivalDiff:cfg.rivalDiff||3});
   newGame({mode:'classic', aiMode:brain, opponents:oppList});
-  G.players.forEach((p,i)=>{ p.isAI=true; p.aiMode=brain; p.idx=i; p.name='AI·'+('甲乙丙丁'[i]||('P'+(i+1))); });
+  G.players.forEach((p,i)=>{ p.isAI=true; p.aiMode=brain; p.idx=i; });
+  const _np=CAST.NAMES.slice(); for(let i=_np.length-1;i>0;i--){const j=rng(i+1);const t=_np[i];_np[i]=_np[j];_np[j]=t;} G.players.forEach((p,k)=>{ p.name=_np[k%_np.length]; });  // 解说要喊昵称
   G.spectate=true;
-  SPEC={on:true,speed:1,paused:false,thinkMs:5000,brain,timer:0,raf:0,deadline:0,remain:0,onDone:null,_total:0,_lp:-1,_lq:-1,p:null,action:null,_afterHook:null};
-  buildSpectatorPanel(); renderAll(); scheduleTurn();
+  SPEC={on:true,speed:1,paused:false,thinkMs:5000,brain,timer:0,raf:0,deadline:0,remain:0,onDone:null,_total:0,_lp:-1,_lq:-1,p:null,action:null,_afterHook:null,castHits:0,castTotal:0,_leader:null,_picks:{}};
+  buildSpectatorPanel(); castOpening(); renderAll(); scheduleTurn();
 }
 /* ---- 非阻塞倒计时 ---- */
 function cancelSpec(){ if(!SPEC)return; clearTimeout(SPEC.timer); _CAF(SPEC.raf); SPEC.timer=0;SPEC.raf=0;SPEC.onDone=null; }
@@ -3017,21 +3018,8 @@ function pickVariant(arr,phase){ if(!arr||!arr.length)return ''; const lastK=pha
   if(arr.length>1){ let g=0; while(i===SPEC[lastK]&&g++<5)i=rng(arr.length); } SPEC[lastK]=i; return arr[i]; }
 function narrate(p,action,phase,ctx){
   if(SIM||!SPEC)return {main:'',lesson:'',extra:'',delta:[]};
-  let key=ctx.eventKey||action.a; if(key==='plutoOrbit')key='orbit'; if(key==='plutoLand')key='land';
-  let bank=NARRATION[key]||NARRATION[action.a]||NARRATION._default;
   const T=specTok(p,action,ctx);
-  if(phase==='pre'){
-    const txt=fillTokens(pickVariant(bank.pre,'pre'),T);
-    return {main:txt, lesson:'', extra:'', delta:[]};
-  } else {
-    const txt=fillTokens(pickVariant(bank.post,'post'),T);
-    // 实际日志（权威）+ 自由行动小结
-    const did=(ctx.logDiff||[]).map(l=>l.replace(/^\[(AI|你)\]\s*/,'').replace(/^·\s*/,'').replace(/^AI\s*/,'')).filter(x=>x&&x.length<60);
-    let extra=did.length?('实际：'+did.slice(0,4).join('；')):'';
-    const lesson=/启示[:：]/.test(txt)?txt.split(/启示[:：]/)[1].trim():'';
-    const main=/启示[:：]/.test(txt)?txt.split(/启示[:：]/)[0].trim():txt;
-    return {main, lesson, extra, delta:ctx.delta||[]};
-  }
+  return phase==='pre'?castPre(p,action,ctx,T):castPost(p,action,ctx,T);
 }
 /* ---- 面板 UI ---- */
 const SPEC_CSS=`#specPanel{position:fixed;left:50%;top:8px;transform:translateX(-50%);width:min(640px,94vw);z-index:90;
@@ -3087,80 +3075,174 @@ function highlightActor(p){ if(typeof document==='undefined')return;
   const a=document.getElementById('specActor'); if(a){ a.textContent=p.name; if(a.style)a.style.color=pcolor(p.idx); }
   renderSpecBtns(); }
 function showSpeech(p,phase,obj){ if(typeof document==='undefined')return;
-  if(phase==='pre'){ const el=document.getElementById('specPre'); if(el)el.innerHTML=obj&&obj.main?('<span class="splbl">🤔 思考中</span>'+esc(obj.main)):''; return; }
+  if(phase==='pre'){ const el=document.getElementById('specPre'); if(el)el.innerHTML=obj&&obj.main?('<span class="splbl">🎙️ 押注</span>'+obj.main):'';
+    const po=document.getElementById('specPost'); if(po)po.innerHTML=''; return; }
   const el=document.getElementById('specPost'); if(!el)return;
   if(!obj){ el.innerHTML=''; return; }
   const chips=(obj.delta||[]).map(d=>`<span class="spchip ${d.vp?'vp':(d.up?'up':'dn')}">${esc(d.label)}</span>`).join('');
-  el.innerHTML='<span class="splbl">✅ 发生了</span>'+esc(obj.main||'')+(chips?('<div>'+chips+'</div>'):'')
-    +(obj.extra?('<div class="spextra">'+esc(obj.extra)+'</div>'):'')
-    +(obj.lesson?('<div class="splesson">💡 启示：'+esc(obj.lesson)+'</div>'):'');
+  const tag=obj.tag?(' <span class="spchip '+(obj.tag.indexOf('✓')>=0?'up':'dn')+'">'+esc(obj.tag)+'</span>'):'';
+  el.innerHTML='<span class="splbl">📣 揭晓</span>'+(obj.main||'')+tag+(chips?('<div>'+chips+'</div>'):'')
+    +(obj.lesson?('<div class="splesson">💡 '+esc(obj.lesson)+'</div>'):'')
+    +(obj.foot?('<div class="spextra">'+obj.foot+'</div>'):'');
   renderSpecBtns();
 }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-/* ---- 解说内容库 ---- */
-const NARRATION={
- _default:{ pre:["{name} 在盘算下一步，看它资源和盘面，应该会做点实在的。"], post:["{name} 完成了一步。"] },
- launch:{ pre:[
-  "{name} 信用够、场上才 {probes} 个探测器，下一步八成【发射】——没探测器就什么都飞不了，先把行动单位铺出去。",
-  "我猜【发射】：SETI 是‘探测器越多、能同时做的事越多’的滚雪球，早铺早赚。",
-  "{name} 大概率发射，{probes} 个探测器行动面太窄，花 2 信用多开一条线。"],
-  post:[
-  "{name} 花 2 信用【发射】，新探测器落在地球，共 {probes} 个。启示：发射不得分，却是一切的入场券——开局别憋大招，先有探测器在场。",
-  "{name} 把探测器放上地球。启示：所有探测器都从地球出发，离目标越远越要早发射早动身，不然太阳系一转你就更远了。"]},
- orbit:{ pre:[
-  "{name} 探测器在 {planet}，环绕拿 {res} 不亏，还触发收入动作；它资源偏紧，我猜环绕补给。",
-  "首环绕分被拿了，{name} 环绕 {planet} 更多是攒‘轨道器’——金板配对和部分任务数轨道器，囤着有终局价值。"],
-  post:[
-  "{name} 环绕 {planet}（-1信用-1能量），吃到 {res}，轨道器+1。启示：环绕不只为分——给资源、给收入动作、攒轨道器资产；且‘先绕后落’让这颗星着陆便宜 1 能量。",
-  "{name} 又添一个轨道器（共 {orbits} 个）。启示：轨道器是终局会变分的资产；资源荒时环绕一颗星补给是很稳的过渡手。"]},
- land:{ pre:[
-  "{name} 探测器稳停 {planet}、能量够——要【着陆】收割了！着陆给 {pts} 分加一个黄色痕迹，飞那么远就为这一下。",
-  "重头戏：{name} 大概率着陆 {planet}，外圈分高（{pts} 分）+黄痕迹推进外星发现，又拿分又攒发现。"],
-  post:[
-  "{name} 着陆 {planet}！花 {cost} 能量，{pts} 分 + {res} + 1 黄色痕迹。启示：着陆是探测器的终极变现，越外圈分越高，把探测器飞到外圈再落地是主得分引擎。",
-  "{name} 落地 {planet}，{pts} 分入账。启示：‘先环绕后着陆’同一颗星省 1 能量又两次吃奖励，是高手基本功；黄痕迹记得标到你想发现的物种上。"]},
- scan:{ pre:[
-  "{name} 能量够（{energy}）、电脑还缺数据，我赌【扫描】：标 {sector} 扇区顺手拿数据，没数据后面分析、做任务全卡。",
-  "{name} 八成扫描——补数据，且 {sector} 扇区要是能标最多，结算拿粉色痕迹，是外星发现的硬通货。"],
-  post:[
-  "{name} 扫描 {sector}（-1信用-2能量），吃数据并占住扇区身位。启示：扫描=花能量换数据+占扇区身位；能量攒到 2 又缺数据就果断扫，优先补能+2分的那格。",
-  "{name} 扫描把 {sector} 自己的标记顶到 {myCount} 个（对手 {rivalCount}）。启示：扫描更是为扇区结算卡位——自己领先就追加锁死，落后太多就换扇区别陪跑。"]},
- analyze:{ pre:[
-  "{name} 电脑顶行满了、有能量，很可能【分析】：花 1 能量清空整台电脑换 1 蓝色痕迹，凑外星三色。",
-  "顶行满+能量够，时机刚好。预测分析：1 能量很便宜，回报是蓝痕迹+清空让格子奖励再吃一轮。"],
-  post:[
-  "{name} 花 1 能量分析，电脑全清，拿 1 蓝色痕迹。启示：蓝痕迹是外星三色（黄着陆/粉赢扇区/蓝分析）之一，想拿外星卡就得留一条分析线产蓝痕迹。",
-  "电脑清空，顶行格子奖励下轮还能再吃一遍。启示：电脑流节奏是‘填满→分析→再填满’，转得越快白嫖的格子奖励越多。"]},
- research:{ pre:[
-  "{name} 攒到 {publicity} 公关，八成去【研究】——开『{techType}』系首取直接 +2 分，便宜不占白不占。",
-  "公关够了，{name} 这步像研究：买能力+开分+转盘三合一，但它得算好太阳系旋转会不会坑到自己的航线。"],
-  post:[
-  "{name} 花 6 公关研究『{tech}』，首取『{techType}』+2 分，顺手转太阳系一格。启示：每系第一张都有 +2 分，开局优先三系各开一张白捡分；研究会转盘，想去外圈先飞再研究。"]},
- card:{ pre:[
-  "{name} 信用够付 {cost}，我猜出『{card}』：{ev}——白区效果常一步顶两步，比单纯花资源做基础动作划算。",
-  "这张『{card}』自带连锁，等于一张卡换一个动作还不占基础资源，资源紧时是救命稻草。"],
-  post:[
-  "{name} 打出『{card}』(-{cost}信用)，触发 {fx}。启示：手里有能‘顺手做别的动作’的牌，别只盯基础动作——打牌经常更省更快。",
-  "『{card}』下场。启示：某资源紧又想做某动作时，先翻手牌有没有卡能直接帮你做掉，往往比硬掏资源便宜。"]},
- pass:{ pre:[
-  "{name} 资源不够大动作（信用{credits}/能量{energy}），可能【跳过】攒资源；作为首位 pass 还会触发太阳系旋转，它在权衡这副作用。",
-  "{name} 没划算的主行动了，与其勉强做亏本操作不如 pass 一手蓄力。"],
-  post:[
-  "{name} 跳过蓄力。启示：pass 不丢人！没好动作时硬做亏本操作才亏；攒够一次做成首环绕+3/首着陆得痕迹，比零敲碎打值——看它下回合的大动作就懂了。"]},
- 'event:firstOrbit':{ pre:[
-  "{name} 探测器已站上 {planet} 且没人环绕过——【环绕】抢首杀几乎必然！首环绕 {planet} 直接 +3 分加奖励，没人会让。",
-  "关键：{name} 就冲着 {planet} 的‘首环绕+3分’来的——抢首杀就是抢分差，先到先得没理由犹豫。"],
-  post:[
-  "{name} 环绕 {planet} 抢到首环绕 +3 分，还拿 {res}！启示：每颗行星的‘第一个环绕’是 +3 分大红包——你探测器在没人碰过的行星上时，优先环绕抢这笔。",
-  "首杀到手！{name} 成 {planet} 第一个轨道器。启示：盘面上‘还没被环绕’的行星就是限时悬赏，规划航线把它们当高优先目标；环绕后同星着陆还便宜 1 能量。"]},
- 'event:firstLand':{ pre:[
-  "{planet} 还没人着陆过——{name} 落下去就是‘首个着陆’额外 +1 数据，探测器在位、能量够，多半抢这首杀。"],
-  post:[
-  "{name} 拿下 {planet} 首个着陆——{pts} 分+首着陆额外 1 数据+黄痕迹一气呵成。启示：没人碰过的行星是双重悬赏（首环绕+3、首着陆+1数据），优先飞过去。"]},
- 'event:discover':{ pre:[
-  "临门一脚！【{species}】已经 2/3 色就差这一枚{color}痕迹。{name} 几乎一定补上——这一标直接翻面发现，贡献者拿 {bonus} 加外星卡，绝不能让对手抢身位。"],
-  post:[
-  "砰！{name} 补上{color}痕迹，【{species}】三色集齐被发现，贡献者各拿 {bonus}，还领 2 张外星卡并激活被动「{passive}」。启示：盯住 2/3 色的物种就是盯一笔大钱，你能补的那刻别犹豫——发现奖励+外星卡+被动一次到账，外星卡比普通卡强。"]}
+/* ---- 🎙️ 足球解说引擎（学习自 puerto-rico-web「解说台」：押注→揭晓→命中率 + 戏剧分类 + 末日热度 + 黑话 + 花絮）---- */
+const ACT_CN={launch:"发射",orbit:"环绕",land:"着陆",scan:"扫描",analyze:"分析",research:"研究",card:"打牌",pass:"跳过",plutoOrbit:"环绕冥王星",plutoLand:"着陆冥王星",moved:"机动"};
+function pickFrom(a){ return (a&&a.length)?a[rng(a.length)]:""; }
+function castHeat(){ return G.round>=G.maxRound?2:(G.round>=G.maxRound-1?1:0); }
+function castStandings(){ return G.players.map(p=>({p,v:p.vp})).sort((a,b)=>b.v-a.v||(b.p.credits-a.p.credits)); }
+// 独立"行家押注"：一套简单启发式给可行主行动打分→softmax→概率（刻意独立于 aiChooseMain，故可能猜错=悬念来源）
+function castPredict(p){
+  const sc=[]; const add=(a,v)=>{ if(v>0)sc.push({a,v}); };
+  let onPlanet=false,bestLandVp=0,firstO=false,firstL=false;
+  p.probes.forEach(pr=>{ if(pr.ring>=0){ const b=ringBody(pr.ring,pr.pos); if(isPlanet(b)){ onPlanet=true; const lv=(PLANETS[b].land&&PLANETS[b].land.vp)||0; if(lv>bestLandVp)bestLandVp=lv; if(G.firstOrbited[b]===undefined)firstO=true; if(G.firstLanded[b]===undefined)firstL=true; } } });
+  if(onPlanet&&p.energy>=landCost(p)) add("land",4+bestLandVp*0.4+(firstL?2:0));
+  if(onPlanet&&p.credits>=1&&p.energy>=1) add("orbit",2+(firstO?2.5:0));
+  if(computerTopFull(p)&&p.energy>=1) add("analyze",4.5);
+  if(p.credits>=1&&p.energy>=2) add("scan",3+(p.data<3?1:0));
+  if(p.publicity>=6&&availTechs(p).length) add("research",3.5);
+  if(p.probes.length<p.probeLimit&&p.credits>=2) add("launch",1.5+(p.probes.length===0?1.6:0));
+  let bestCard=0; p.hand.forEach(c=>{ if(p.credits>=c.cost){ const cv=aiCardValue(p,c); if(cv>bestCard)bestCard=cv; } });
+  if(bestCard>0) add("card",2+bestCard*0.45);
+  add("pass",(p.credits<1&&p.energy<2)?2.6:0.4);
+  if(!sc.length)sc.push({a:"pass",v:1});
+  const mx=Math.max.apply(null,sc.map(x=>x.v)); const Tm=1.3; let Z=0;
+  sc.forEach(x=>{x.e=Math.exp((x.v-mx)/Tm);Z+=x.e;}); sc.forEach(x=>x.p=x.e/Z);
+  sc.sort((a,b)=>b.p-a.p); return sc;
+}
+function castVpDelta(ctx){ let dv=0; (ctx.delta||[]).forEach(d=>{ if(d.vp){ const m=d.label.match(/(\d+)→(\d+)/); if(m)dv=(+m[2])-(+m[1]); } }); return dv; }
+function classifyMove(p,a,ctx){
+  if(ctx.eventKey==="event:discover") return "discover";
+  if(ctx.eventKey==="event:firstOrbit") return "firstOrbit";
+  if(ctx.eventKey==="event:firstLand") return "firstLand";
+  const did=(ctx.logDiff||[]).join("｜"); const dv=castVpDelta(ctx);
+  if(/扇区.*完成/.test(did) && did.indexOf("胜者："+pname(p.idx))>=0) return "sectorWin";   // 仅当本人是扇区胜者
+  if(/金色里程碑|标记金板/.test(did) && dv>0) return "milestone";                          // 仅当本人这步跨线
+  const st=castStandings(); const rank=st.findIndex(s=>s.p===p); const last=G.players.length-1;
+  if(dv>=6) return rank===0?"leadCrush":(rank>=last?"underdog":"power");
+  if(a.a==="land"||a.a==="plutoLand") return "land";
+  if(a.a==="analyze") return "analyze";
+  if(a.a==="scan") return "scan";
+  if(a.a==="research") return "research";
+  if(a.a==="card") return dv<=0?"waste":"card";
+  if(a.a==="pass") return "pass";
+  if(a.a==="orbit"||a.a==="launch"||a.a==="plutoOrbit") return "supply";
+  return "meh";
+}
+function castStreak(p,a){ SPEC._picks=SPEC._picks||{}; const k=p.idx+":"+a.a; const n=(SPEC._picks[k]=(SPEC._picks[k]||0)+1);
+  if(n===3) return " "+fillTokens(pickFrom(CAST.STREAK.three),{name:p.name,action:ACT_CN[a.a]||a.a});
+  if(n>=4) return " "+fillTokens(pickFrom(CAST.STREAK.more),{name:p.name,action:ACT_CN[a.a]||a.a,count:n});
+  return ""; }
+function castLeadChange(){ const st=castStandings(); if(st.every(s=>s.v<=0))return ""; const leader=st[0].p; const prev=SPEC._leader; SPEC._leader=leader;
+  if(prev&&prev!==leader) return " "+fillTokens(pickFrom(CAST.LEADCHANGE),{leader:leader.name,prev:prev.name}); return ""; }
+function castColor(){ return rng(100)<22?(" "+pickFrom(CAST.COLOR)):""; }
+function castOpening(){ if(typeof document==="undefined")return; const roster=G.players.map(p=>"<b>"+p.name+"</b>").join("、");
+  const line=fillTokens(pickFrom(CAST.OPENING),{roster,n:G.players.length});
+  const el=document.getElementById("specPre"); if(el)el.innerHTML='<span class="splbl">🎙️ 开场</span>'+line;
+  const po=document.getElementById("specPost"); if(po)po.innerHTML=""; }
+function castFinale(){ if(typeof document==="undefined"||!SPEC)return; const st=castStandings(); const gap=st[0].v-(st[1]?st[1].v:0);
+  const line=fillTokens(pickFrom(CAST.FINALE),{champ:st[0].p.name,score:st[0].v,gap});
+  const el=document.getElementById("specPost"); if(el)el.innerHTML='<span class="splbl">🏆 终场</span>'+line;
+  const a=document.getElementById("specActor"); if(a)a.textContent="🏁 赛后复盘"; setBar(1,"对局结束"); }
+function castPre(p,a,ctx,T){
+  ctx.pred=ctx.pred||castPredict(p); const pred=ctx.pred;
+  const top=pred[0]||{a:"pass",p:0.4}; const pct=Math.round((top.p||0)*100);
+  T.action="【"+(ACT_CN[top.a]||top.a)+"】"; T.pct=pct; T.reason=fillTokens(pickFrom(CAST.PRE.reason[top.a]||[""]),T);
+  const heat=castHeat(); const opener=pickFrom(CAST.PRE.opener[heat===2?"final":heat===1?"near":"calm"]);
+  const tier=pct>=45?"high":pct>=28?"mid":"low";
+  let line=opener+fillTokens(pickFrom(CAST.PRE[tier]),T);
+  if(pred[1]&&pred[1].p>0.18&&pct>=28) line+=" 紧追的是【"+(ACT_CN[pred[1].a]||pred[1].a)+"】（"+Math.round(pred[1].p*100)+"%）！";
+  return {main:line, kind:"predict"};
+}
+function castPost(p,a,ctx,T){
+  const pred=ctx.pred||[]; const rank=pred.findIndex(x=>x.a===a.a);
+  SPEC.castTotal=(SPEC.castTotal||0)+1; if(rank===0)SPEC.castHits=(SPEC.castHits||0)+1;
+  T.gain=Math.max(0,castVpDelta(ctx)); const st=castStandings(); const opp=st.find(s=>s.p!==p); T.rival=opp?opp.p.name:"对手";
+  const cat=classifyMove(p,a,ctx);
+  let line=fillTokens(pickFrom(CAST.POST[cat]||CAST.POST.meh),T);
+  const jg=CAST.JARGON[a.a]; if(jg){ const arr=(castHeat()>=1&&jg.near)?jg.near:jg.line; if(arr&&arr.length)line+=" "+fillTokens(pickFrom(arr),T); }
+  line+=castStreak(p,a)+castLeadChange()+castColor();
+  let tag=""; if(rank===0)tag="[解说命中✓]"; else if(rank>2||rank<0)tag="[爆冷·打脸✗]";
+  const lead=st[0]; const gap=lead.v-(st[1]?st[1].v:0); const acc=SPEC.castTotal?Math.round((SPEC.castHits||0)/SPEC.castTotal*100):0;
+  const hn=castHeat()===2?"🔚 终场哨已吹响！ ":castHeat()===1?"⏳ 末日倒计时… ":"";
+  const foot=hn+"局势：<b>"+lead.p.name+"</b> "+lead.v+" 分领跑（领先次席 "+gap+" 分）· 解说命中 "+(SPEC.castHits||0)+"/"+SPEC.castTotal+"（"+acc+"%）";
+  const lesson=fillTokens(CAST.LESSON[cat]||CAST.LESSON[a.a]||"",T);
+  return {main:line, tag, foot, lesson, delta:ctx.delta||[], kind:cat};
+}
+const CAST={
+ NAMES:["织女","天狼","参宿","脉冲星","暗涌","拓荒者","红移","观天","猎户","北落","巡天","引力波","回波","信使","深空","昴宿"],
+ OPENING:[
+  "欢迎来到深空观测台！今晚 {n} 台 AI 同场竞技——{roster}！射电望远镜已校准，探测器整装待发，搜寻地外文明大赛——正式开始！",
+  "观众朋友们晚上好！这里是 SETI 竞技场直播现场。今晚的全明星对决：{roster}。神仙打架，凡人观战，发射倒计时——点火！",
+  "灯光打向发射台！{roster} 鱼贯入场。五个回合，一片星海，谁能先听见外星文明的回声？比赛，开始！"],
+ FINALE:[
+  "终场哨响！！冠军是——<b>{champ}</b>！！{gap} 分的{gap}…{score} 分登顶，{champ} 把名字刻进了这片星空！向看台挥手吧！",
+  "比赛结束！<b>{champ}</b> 以 <b>{score}</b> 分捧起奖杯！对手的散热风扇还在不甘地转着——但今夜，星海属于 {champ}！",
+  "终场！<b>{champ}</b> {score} 分夺冠，领先次席 {gap} 分。复盘三主线：① 塞收入卡滚雪球；② 抢首杀(首环绕/首着陆)；③ 凑里程碑金板＋早发现外星拿外星卡。学会这三点，你也能登顶！"],
+ PRE:{
+  high:["我重押 {action}！可能性 <b>{pct}%</b>！{reason}","毫无悬念——{action}！<b>{pct}%</b>！{reason}","<b>{name}</b> 的手已经按上去了，我闭着眼睛报：{action}（<b>{pct}%</b>）！{reason}"],
+  mid:["<b>{name}</b> 登场——我看好 {action}（<b>{pct}%</b>）！{reason}","直觉告诉我是 {action}（<b>{pct}%</b>）！{reason}","轮到 <b>{name}</b>，我压 {action}（<b>{pct}%</b>）。{reason}"],
+  low:["七个动作几乎五五开——<b>{name}</b> 这手太难猜了，我咬牙压 {action}（仅 <b>{pct}%</b>），猜错别笑话我！","盘口乱成一锅星云！我硬着头皮报 {action}（<b>{pct}%</b>），<b>{name}</b> 你可别给我惊喜！"],
+  opener:{calm:["",""],near:["⏳ 末日临近——","⏳ 只剩最后两轮了——"],final:["🔚 生死时速！","🔚 终场哨在即！"]},
+  reason:{
+   launch:["没探测器就什么都飞不了，先铺行动单位。","探测器越多能同时做的事越多，滚雪球趁早。"],
+   orbit:["探测器停在行星上，环绕拿资源+收入动作不亏。","它资源偏紧，环绕补一手最稳。"],
+   land:["探测器到位、能量够，外圈分高，该收割了！","飞那么远就为这一落——着陆是主得分引擎。"],
+   scan:["电脑缺数据，扫描补数据兼占扇区身位。","没数据后面分析、做任务全卡，得先扫一手。"],
+   analyze:["电脑顶行满了，1 能量清空换蓝痕迹，便宜。","凑外星三色就差蓝痕迹，时机刚好。"],
+   research:["公关攒够 6，开新科技系首取还 +2 分。","买能力+开分+转盘三合一，性价比高。"],
+   card:["手里有连锁牌，一步顶两步比硬花资源划算。","资源紧，靠卡牌救场。"],
+   pass:["资源见底，与其亏本操作不如 pass 蓄力。","攒一回合做成大动作，比零敲碎打值。"]}
+ },
+ POST:{
+  firstOrbit:["首杀到手！！<b>{name}</b> 一记 {action}抢下 <b>{planet}</b> 的‘首个环绕’——<b>+3 分</b>红包加 {res} 一把抓走，没人来得及拦！全场沸腾！","漂亮！<b>{name}</b> 抢在所有人前面环绕 <b>{planet}</b>，<b>+3 分</b>首杀锁死！这就是会规划航线的人——盘面上没人碰过的星，就是限时悬赏！"],
+  firstLand:["双重悬赏被 <b>{name}</b> 收下！首个着陆 <b>{planet}</b>——<b>{pts} 分</b>＋首着陆额外数据＋黄痕迹一气呵成！教科书级别的落点！","<b>{name}</b> 一脚踩在 <b>{planet}</b> 的处女地上！首着陆红利吃满，分数与痕迹双响炮，漂亮！"],
+  land:["<b>{name}</b> 着陆 <b>{planet}</b>，<b>{pts} 分</b>稳稳入账，还摘下一枚黄色痕迹！着陆就是探测器的终极变现——越外圈分越高！","收割时刻！<b>{name}</b> 落地 <b>{planet}</b>，{pts} 分到手。‘先绕后落’省能量又两次吃奖励，老练！"],
+  analyze:["<b>{name}</b> 启动超级电脑，整台清空，crunch 出一枚蓝色痕迹！电脑流转起来了——填满→分析→再填满，停不下来！","数据被嚼碎，蓝痕迹到手！<b>{name}</b> 这是在凑外星三色的最后一块拼图！"],
+  scan:["<b>{name}</b> 一套扫描甩出去，数据进账，{sector} 扇区身位也占住了！没数据寸步难行，这一手很实在。","<b>{name}</b> 扫描 {sector}，自己标记顶到 <b>{myCount}</b> 个（对手 {rivalCount}）——这是要把扇区的粉痕迹锁死啊！"],
+  research:["<b>{name}</b> 砸下 6 公关研究科技，首取 +2 分顺手转动太阳系！买能力+开分+转盘，一鱼三吃！","科技到手——但注意，太阳系也转了一格！这是研究的隐藏代价，<b>{name}</b> 显然算好了航线。"],
+  card:["<b>{name}</b> 甩出一张卡，连锁触发——一步顶两步，这就是 SETI 的‘一鱼多吃’！","好牌！<b>{name}</b> 用一张卡省下本要花的资源/动作，行云流水！"],
+  supply:["<b>{name}</b> 稳健补给：{action}一手攒资源、铺底子。没有火花，但棋盘上的杀招往往就藏在这种安静里。","不温不火，<b>{name}</b> {action}过渡一手，把节奏交还牌桌——稳字当头。"],
+  pass:["<b>{name}</b> 跳过蓄力！pass 不丢人——没好动作时硬做亏本操作才亏，它在憋下回合的大招！","<b>{name}</b> 按下暂停键攒资源。看它下一回合做了什么大动作，你就懂这一手的深意了！"],
+  discover:["砰——！！<b>{name}</b> 补上最后一枚{color}痕迹，<b>{species}</b> 三色集齐、当场翻面被发现！！这是全场最大的新闻！贡献者各拿 {bonus}，{name} 还揣走 2 张外星卡！外星卡可比普通卡强一截！","历史性时刻！<b>{name}</b> 一标点亮 <b>{species}</b>！发现奖励+外星卡+专属被动一次到账——它盯这一口大的盯了很久了！"],
+  sectorWin:["扇区结算——<b>{name}</b> 以标记最多笑到最后，抢走一枚<b>粉色痕迹</b>！所有贡献者各 +1 公关，<b>{rival}</b> 只能屈居第二留个身位！这一刀又稳又狠！","卡位成功！<b>{name}</b> 把扇区的粉痕迹生生夺走，<b>{rival}</b> 的算盘当场被掀翻！粉痕迹是外星三色一环，该抢就抢！"],
+  milestone:["<b>{name}</b> 分数跨过里程碑，<b>抢下一块金色计分板</b>！到得早、倍率高——金板是终局的倍增器，这一抢可能就是终局的胜负手！","金板入袋！<b>{name}</b> 卡着里程碑先到先得拿了高倍率，还顺手给后面定了堆分方向，老谋深算！"],
+  leadCrush:["霸气外露！领跑的 <b>{name}</b> 用这一手把优势焊死，<b>净赚约 {gain} 分</b>！王座上的风景独好，谁能拦住它？！","碾压！就是碾压！<b>{name}</b> 又是一波暴击，把分差拉到令人窒息——这是属于王者的从容！"],
+  underdog:["但是！！！垫底的 <b>{name}</b> 没有认输！这一手撕开一道口子，<b>净赚约 {gain} 分</b>——绝境中的怒吼，英雄不死，翻盘有望！","不服输！<b>{name}</b> 在最艰难的时刻祭出杀招，硬生生抢回一口气！这就是冠军的心脏！"],
+  power:["漂亮！<b>{name}</b> 这一手价值连城，<b>净赚约 {gain} 分</b>！强！实在是强！","世界级的一手！<b>{name}</b> 收益拉满，解说席集体起立！"],
+  waste:["（停顿）……<b>{name}</b> 这一手几乎颗粒无收，资源是真花出去了，分却没见着——大意了啊！比赛还长，下一手找回来！","哎呀，<b>{name}</b> 这步火候差了点意思，雷声大雨点小。我相信它有更深的布局……对吧？"],
+  meh:["<b>{name}</b> 轻拿轻放过渡一手，收益平平。象棋里这叫等着——看谁先沉不住气。","不温不火，<b>{name}</b> 把节奏交还牌桌，稳字当头。"]
+ },
+ JARGON:{
+  scan:{line:["抢扇区！谁标记多谁拿粉痕迹！"],near:["扇区身位就是终局分，这一手在抢命脉！"]},
+  research:{line:["转盘要动了——他在赌旋转把目标行星转近还是转远！"],near:["这一转可能把对手的航线整个掀翻！"]},
+  land:{line:["1 落地，分痕双收！"],near:["末段冲刺，外圈大分就靠这一落！"]},
+  analyze:{line:["电脑流名场面：填满→分析→再填满！"]},
+  pass:{line:["pass 是工具不是认怂——首位 pass 还能主动转盘！"],near:["控速！他在算太阳系还能转几圈，要卡死终局节奏！"]},
+  orbit:{line:["轨道器是会变分的资产，囤着！"]},
+  launch:{line:["多一个探测器，多一条活路！"]},
+  card:{line:["一卡多吃，这就是手牌的价值！"]}
+ },
+ COLOR:["解说席的咖啡又凉了，谁还顾得上喝！","我的搭档老何已经把领带扯下来当毛巾用了！","导播！快给个特写！","观众朋友们，这就是 SETI——每一个动作都是星辰大海的岔路口！","干了三十年解说，这种局面我手心还是会出汗！","深空的电波此刻都为之一滞！","电视机前的观众请扶稳坐好！","射电望远镜的指针都在发抖！"],
+ STREAK:{three:["注意——这已经是 <b>{name}</b> 本场<b>第 3 次</b>{action}了，执念初现！"],more:["{action}×{count}！<b>{name}</b> 和这套打法怕不是签了终身合同！"]},
+ LEADCHANGE:["👑 风云突变！<b>{leader}</b> 把 <b>{prev}</b> 从王座上拽了下来，头名易主！","👑 改朝换代！积分榜第一现在写着——<b>{leader}</b>！"],
+ LESSON:{
+  firstOrbit:"探测器在没人碰过的行星上时，优先环绕抢‘首环绕+3分’，全场最划算的分之一。",
+  firstLand:"开局扫一眼哪些行星全新无人——首环绕+3、首着陆+数据，双重悬赏优先去。",
+  land:"着陆越外圈分越高；‘先环绕后着陆’同星省 1 能量又两次吃奖励。",
+  analyze:"想拿外星卡必须留一条分析线产蓝痕迹；电脑转得越快白嫖的格子奖励越多。",
+  scan:"扫描=换数据+占扇区身位；自己领先就追加锁死，落后太多就换扇区别陪跑。",
+  research:"每系第一张科技都 +2 分，开局优先三系各开一张；研究会转盘，想去外圈先飞再研究。",
+  card:"手里有能顺手做别的动作的牌，往往比硬掏资源做基础动作更省更快。",
+  pass:"没好动作时 pass 攒资源最优；攒够一次做成首杀，比零敲碎打值。",
+  supply:"资源荒时环绕/发射补给是很稳的过渡手，别硬凑亏本大动作。",
+  discover:"盯住 2/3 色的物种就是盯一笔大钱——发现奖励+外星卡+被动一次到账，能补就别犹豫。",
+  sectorWin:"粉色痕迹是外星三色一环，该抢就抢；并列时‘最后行动者’赢，眼看要平就抢最后一刀。",
+  milestone:"金板先到倍率高，冲里程碑要趁早，而且它反过来指导你后面该堆哪类分。",
+  waste:"评估一张卡/一步该不该做，就看这一下能不能省下你本要花的资源或动作。",
+  meh:"资源紧张靠塞收入卡滚雪球；少犯错、别浪费行动，是大赛硬道理。"
+ }
 };
 /* ===================== /spectate ===================== */
 
@@ -4062,12 +4144,8 @@ function showFinal(){
   const winners=ps.filter(p=>p.vp===maxVp);
   const youWin=winners.indexOf(ps[0])>=0;
   SFX.play(youWin?'win':'lose');
-  // 🎙️ 观战：赛后复盘解说 + 不记战绩
-  if(G.spectate && SPEC){
-    const w=winners[0]; const T={name:pname(w.idx)};
-    showSpeech(w,'post',{main:fillTokens('本局结束！{name} 胜出。复盘三条主线：① 收入卡滚雪球——前期多塞收入卡，资源越滚越多；② 抢首杀——盘面上没人碰过的行星，首环绕+3分、首着陆+1数据，优先去；③ 凑里程碑金板 + 早发现外星拿外星卡加速。看懂这三点，你上手就不亏。',T),lesson:'',extra:'',delta:[]});
-    setBar(1,'对局结束'); const a=document.getElementById&&document.getElementById('specActor'); if(a)a.textContent='🏁 赛后复盘';
-  }
+  // 🎙️ 观战：终场颁奖解说 + 不记战绩
+  if(G.spectate && SPEC){ castFinale(); }
   // 战绩记录：仅真实对局、每局一次（教程/剧情/观战不计）
   if(!G._recorded && !G._tut && !_storyTut && !G.spectate){
     G._recorded=true;
