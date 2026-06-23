@@ -41,6 +41,13 @@
   button.primary{background:linear-gradient(180deg,#2f7bdc,#1a4ba6);border-color:#5b94e6;box-shadow:0 0 16px rgba(60,130,230,.4)}
   button.gold{background:linear-gradient(180deg,#e7c25e,#a9821f);border-color:var(--gold);color:#241700;text-shadow:none;box-shadow:0 0 16px rgba(245,205,106,.35)}
   button.small{padding:5px 9px;font-size:12px;font-weight:600}
+  button.act.cando:not(:disabled){border-color:#46e08a;box-shadow:0 0 11px rgba(70,224,138,.28);background:linear-gradient(180deg,#1c5060,#10303a)}
+  button.act.cantdo{opacity:.4;cursor:help}
+  button.act.cantdo:hover:not(:disabled){opacity:.62;border-color:#7a3a32;box-shadow:none;transform:none}
+  .turnbar{grid-column:1/-1;text-align:center;font-weight:800;font-size:12.5px;border-radius:8px;padding:5px 6px;margin-bottom:3px;letter-spacing:.3px}
+  .turnbar.you{background:linear-gradient(90deg,#0d3a2a,#114a33);color:#6fe7b0;border:1px solid #2e6b4d;box-shadow:0 0 14px rgba(70,224,138,.22)}
+  .turnbar.wait{background:#14233f;color:#9fb4d6;border:1px solid #2a4f86}
+  .turnbar.passed{background:#2a1f14;color:#d9b48c;border:1px solid #6b4a2e}
   .grid-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
   .muted{color:var(--muted)} .small{font-size:12px}
   .tag{font-size:11px;padding:2px 7px;border-radius:7px;background:rgba(8,18,40,.7);border:1px solid var(--line);color:var(--muted)}
@@ -4055,6 +4062,20 @@ function showOrgZoom(idx){
   $('modal').innerHTML=`<h2>${o.name}</h2><img src="assets/orgs/${o.img}" style="max-width:380px;border-radius:10px;display:block;margin:0 auto"><div class="small" style="margin-top:8px;line-height:1.6">被动 ${o.pdesc}<br><span style="color:var(--gold)">主动 ${o.adesc}</span></div><div style="margin-top:10px"><button class="opt" onclick="closeModal()">关闭</button></div>`;
   $('modalbg').style.display='flex';
 }
+// 每个主行动「能否做 + 为什么不能」（BGA/可用性研究：高亮可做的、对不可做的解释原因）
+function actInfo(p,onPlanet,landB){
+  const lack=(c,e,pub)=>{ const m=[]; if(c&&p.credits<c)m.push('差'+(c-p.credits)+'信用'); if(e&&p.energy<e)m.push('差'+(e-p.energy)+'能量'); if(pub&&p.publicity<pub)m.push('差'+(pub-p.publicity)+'公关'); return m; };
+  const I={};
+  { const m=lack(2,0,0); I.launch=(p.probes.length>=p.probeLimit)?{ok:false,why:'探测器已达上限（'+p.probeLimit+'）'}:{ok:m.length===0,why:'发射 2信用：'+m.join('、')}; }
+  { let m=onPlanet?lack(1,1,0):null; I.orbit=!onPlanet?{ok:false,why:'先选中一个停在行星上的探测器'}:{ok:m.length===0,why:'环绕 1信用+1能量：'+m.join('、')}; }
+  { I.land=!onPlanet?{ok:false,why:'先选中一个停在行星上的探测器'}:(p.energy<landCost(p,landB)?{ok:false,why:'着陆需 '+landCost(p,landB)+' 能量（差'+(landCost(p,landB)-p.energy)+'）'}:{ok:true,why:''}); }
+  { const m=lack(1,2,0); I.scan={ok:m.length===0,why:'扫描 1信用+2能量：'+m.join('、')}; }
+  { I.analyze=!computerTopFull(p)?{ok:false,why:'先把电脑顶行 6 格数据填满，才能分析'}:(p.energy<1?{ok:false,why:'分析需 1 能量'}:{ok:true,why:''}); }
+  I.card=p.hand.length?{ok:true,why:''}:{ok:false,why:'手里没有卡牌'};
+  { I.research=p.publicity<6?{ok:false,why:'研究需 6 公关（差'+(6-p.publicity)+'）'}:(availTechs(p).length===0?{ok:false,why:'已无可研究的新科技'}:{ok:true,why:''}); }
+  I.pass={ok:true,why:''};
+  return I;
+}
 function renderActions(){
   const p=G.players[0];
   const dis= !canAct();
@@ -4071,14 +4092,25 @@ function renderActions(){
       <button class="act gold" style="min-width:96px" ${dis||p.orgUsed?'disabled':''} onclick="youOrgActive()">${p.orgUsed?'✓本回合已用':'🏢 组织能力'}<br><span style="font-size:9px">${p.org.adesc}</span></button>
     </div>`;
   }
-  $('actions').innerHTML=orgBar+`
-    <button class="act${gl('launch')}" data-act="launch" ${dis||p.probes.length>=p.probeLimit||p.credits<2?'disabled':''} ${lk('launch')} onclick="actLaunch()">🚀 发射探测器<br><span class="small muted">2信用</span></button>
-    <button class="act${gl('orbit')}" data-act="orbit" ${dis||!onPlanet||p.credits<1||p.energy<1?'disabled':''} ${lk('orbit')} onclick="actOrbit()">🛰 环绕<br><span class="small muted">1信用+1能量</span></button>
-    <button class="act${gl('land')}" data-act="land" ${dis||!onPlanet||p.energy<landCost(p,landB)?'disabled':''} ${lk('land')} onclick="actLand()">🪂 着陆<br><span class="small muted">${landCost(p,landB)}能量</span></button>
-    <button class="act${gl('scan')}" data-act="scan" ${dis||p.credits<1||p.energy<2?'disabled':''} ${lk('scan')} onclick="actScan()">📡 扫描<br><span class="small muted">1信用+2能量</span></button>
-    <button class="act${gl('analyze')}" data-act="analyze" ${dis||!computerTopFull(p)||p.energy<1?'disabled':''} ${lk('analyze')} onclick="actAnalyze()">💾 分析数据<br><span class="small muted">1能量</span></button>
-    <button class="act${gl('card')}" data-act="card" ${dis||p.hand.length===0?'disabled':''} ${lk('card')} onclick="actPlayCardPrompt()">🃏 打出卡牌</button>
-    <button class="act${gl('research')}" data-act="research" ${dis||p.publicity<6||availTechs(p).length===0?'disabled':''} ${lk('research')} onclick="actResearchPrompt()">🔬 研究科技<br><span class="small muted">6公关</span></button>
+  const I=actInfo(p,onPlanet,landB);
+  const TLk=a=>!!(TL&&TL!==a);                                    // 教程锁
+  // 你的回合：可做→绿框高亮，不可做→变暗但仍可点（点了由 act* 弹 toast 说明原因，比 disabled 提示更可靠）
+  const cando=a=>(!dis && I[a] && I[a].ok && !TLk(a))?' cando':'';
+  const cantdo=a=>(!dis && I[a] && !I[a].ok && !TLk(a))?' cantdo':'';
+  const tt=a=>(!dis && I[a] && !I[a].ok && I[a].why)?(' title="'+I[a].why.replace(/"/g,'')+'"'):'';
+  const dz=a=>(dis||TLk(a))?'disabled':'';                        // 仅在"非你回合/教程锁"时真正禁用
+  const banner = dis
+    ? (p.passed ? '<div class="turnbar passed">✓ 你已跳过本回合 · 等待其他玩家结束</div>'
+       : '<div class="turnbar wait">⏳ '+((G.players[G.active]&&G.players[G.active].isAI)?pname(G.active)+' 思考中…':'请稍候…')+'</div>')
+    : '<div class="turnbar you">🟢 你的回合 · 选 1 个<b>主行动</b>（绿框=现在可做；自由行动不限次）</div>';
+  $('actions').innerHTML=orgBar+banner+`
+    <button class="act${gl('launch')}${cando('launch')}${cantdo('launch')}" data-act="launch" ${dz('launch')}${tt('launch')} onclick="actLaunch()">🚀 发射探测器<br><span class="small muted">2信用</span></button>
+    <button class="act${gl('orbit')}${cando('orbit')}${cantdo('orbit')}" data-act="orbit" ${dz('orbit')}${tt('orbit')} onclick="actOrbit()">🛰 环绕<br><span class="small muted">1信用+1能量</span></button>
+    <button class="act${gl('land')}${cando('land')}${cantdo('land')}" data-act="land" ${dz('land')}${tt('land')} onclick="actLand()">🪂 着陆<br><span class="small muted">${landCost(p,landB)}能量</span></button>
+    <button class="act${gl('scan')}${cando('scan')}${cantdo('scan')}" data-act="scan" ${dz('scan')}${tt('scan')} onclick="actScan()">📡 扫描<br><span class="small muted">1信用+2能量</span></button>
+    <button class="act${gl('analyze')}${cando('analyze')}${cantdo('analyze')}" data-act="analyze" ${dz('analyze')}${tt('analyze')} onclick="actAnalyze()">💾 分析数据<br><span class="small muted">1能量</span></button>
+    <button class="act${gl('card')}${cando('card')}${cantdo('card')}" data-act="card" ${dz('card')}${tt('card')} onclick="actPlayCardPrompt()">🃏 打出卡牌</button>
+    <button class="act${gl('research')}${cando('research')}${cantdo('research')}" data-act="research" ${dz('research')}${tt('research')} onclick="actResearchPrompt()">🔬 研究科技<br><span class="small muted">6公关</span></button>
     ${(G.pluto&&p.pluto)?`
     <button class="act" data-act="plutoOrbit" ${dis||!canPlutoOrbit(p)?'disabled':''} onclick="actOrbitPluto()" title="冥王星促销：最外环有探测器即可环绕（每人限1次）">🌑 环绕冥王星<br><span class="small muted">1信用+1能量${p.pluto&&p.pluto.orb?' ✓已环绕':''}</span></button>
     <button class="act" data-act="plutoLand" ${dis||!canPlutoLand(p)?'disabled':''} onclick="actLandPluto()" title="冥王星促销：最外环有探测器即可着陆（每人限1次）">🌑 着陆冥王星<br><span class="small muted">${plutoLandCost(p)}能量${p.pluto&&p.pluto.land?' ✓已着陆':''}</span></button>`:''}
