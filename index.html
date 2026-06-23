@@ -838,6 +838,7 @@ function freshPlayer(name,isAI,color){
     probeLimit:1,
     orbiters:0,landers:0,
     sectorWins:0,
+    sectorWinsByColor:{r:0,b:0,y:0,k:0},
     traces:{land:0,win:0,analyze:0},
     alienPowers:[],       // 已发现物种赋予的被动 key 列表
     alienSpecies:[],      // 你参与发现的物种 key（决定哪些道具系统生效）
@@ -1800,6 +1801,7 @@ function resolveSector(secIdx){
   const reward= sec.firstWon? {trace:'win',vp:1} : {trace:'win',vp:3,data:1};
   sec.firstWon=true;
   wp.sectorWins++;
+  if(wp.sectorWinsByColor && sec.color) wp.sectorWinsByColor[sec.color]=(wp.sectorWinsByColor[sec.color]||0)+1;   // 按颜色统计胜扇区（供「观测」类任务卡判定）
   gain(wp,reward,true);
   SFX.play('sector');
   if(!SIM && G._tut && winner===0){ G._tutSectorWin=secIdx; }   // 剧情教程：玩家赢得扇区
@@ -2120,6 +2122,45 @@ function conditionMet(p,cond){
   if(cond==='land1')return p.landers>=1;
   if(cond==='orbit2')return p.orbiters>=2;
   if(cond==='orbitOrLand1')return (p.orbiters+p.landers)>=1;
+  // —— 真实卡牌任务条件（2026-06，依据 Ender-Wiggin2019/seti 权威数据映射）——
+  if(cond==='fulfill_y2')return (p.sectorWinsByColor?p.sectorWinsByColor['y']:0)>=2;
+  if(cond==='visitAnyPlanet')return p.probes.some(pr=>pr.ring>=0 && ['mercury','venus','mars','jupiter','saturn','uranus','neptune','pluto'].includes(ringBody(pr.ring,pr.pos)));
+  if(cond==='tAnalyze1')return p.traces.analyze>=1;
+  if(cond==='tLand1')return p.traces.land>=1;
+  if(cond==='tAnalyze3')return p.traces.analyze>=3;
+  if(cond==='fulfill_k1')return (p.sectorWinsByColor?p.sectorWinsByColor['k']:0)>=1;
+  if(cond==='tech3')return (p.techs.probe.length+p.techs.tele.length+p.techs.comp.length)>=3;
+  if(cond==='ol_saturn')return (occCount('saturn','orb',p.idx)+occCount('saturn','land',p.idx))>0;
+  if(cond==='sig4')return Object.keys(p.markedSectors||{}).length>=4;
+  if(cond==='tAnalyze2')return p.traces.analyze>=2;
+  if(cond==='visit_venus_jupiter')return p.probes.some(pr=>pr.ring>=0 && ringBody(pr.ring,pr.pos)==='venus') && p.probes.some(pr=>pr.ring>=0 && ringBody(pr.ring,pr.pos)==='jupiter');
+  if(cond==='tWin1')return p.traces.win>=1;
+  if(cond==='tWin3')return p.traces.win>=3;
+  if(cond==='orbitAndLand1')return p.orbiters>=1 && p.landers>=1;
+  if(cond==='ol_jupiter')return (occCount('jupiter','orb',p.idx)+occCount('jupiter','land',p.idx))>0;
+  if(cond==='traceSet')return p.traces.land>=1 && p.traces.win>=1 && p.traces.analyze>=1;
+  if(cond==='pub8')return p.publicity>=8;
+  if(cond==='ol_mars')return (occCount('mars','orb',p.idx)+occCount('mars','land',p.idx))>0;
+  if(cond==='ol_mercury')return (occCount('mercury','orb',p.idx)+occCount('mercury','land',p.idx))>0;
+  if(cond==='techEachType')return p.techs.probe.length>=1 && p.techs.tele.length>=1 && p.techs.comp.length>=1;
+  if(cond==='probeAsteroid')return p.probes.some(pr=>pr.ring>=0 && ringBody(pr.ring,pr.pos)==='asteroid');
+  if(cond==='emptyHand')return (p.hand?p.hand.length:0)===0;
+  if(cond==='visit_jupiter_saturn')return p.probes.some(pr=>pr.ring>=0 && ringBody(pr.ring,pr.pos)==='jupiter') && p.probes.some(pr=>pr.ring>=0 && ringBody(pr.ring,pr.pos)==='saturn');
+  if(cond==='orbiterLanderSame')return ['mercury','venus','mars','jupiter','saturn','uranus','neptune'].some(b=>occCount(b,'orb',p.idx)>0 && occCount(b,'land',p.idx)>0);
+  if(cond==='probeFar')return p.probes.some(pr=>pr.ring>=2);
+  if(cond==='fulfill_r2')return (p.sectorWinsByColor?p.sectorWinsByColor['r']:0)>=2;
+  if(cond==='vp50')return p.vp>=50;
+  if(cond==='orbiters2')return p.orbiters>=2;
+  if(cond==='probeComet')return p.probes.some(pr=>pr.ring>=0 && ringBody(pr.ring,pr.pos)==='comet');
+  if(cond==='fulfill_b2')return (p.sectorWinsByColor?p.sectorWinsByColor['b']:0)>=2;
+  if(cond==='landers3')return p.landers>=3;
+  if(cond==='orbitLand5')return (p.orbiters+p.landers)>=5;
+  if(cond==='tLand3')return p.traces.land>=3;
+  if(cond==='ol_neptune')return (occCount('neptune','orb',p.idx)+occCount('neptune','land',p.idx))>0;
+  if(cond==='ol_uranus')return (occCount('uranus','orb',p.idx)+occCount('uranus','land',p.idx))>0;
+  if(cond==='ol_venus')return (occCount('venus','orb',p.idx)+occCount('venus','land',p.idx))>0;
+  if(cond==='visit_uranus_neptune')return p.probes.some(pr=>pr.ring>=0 && ringBody(pr.ring,pr.pos)==='uranus') && p.probes.some(pr=>pr.ring>=0 && ringBody(pr.ring,pr.pos)==='neptune');
+  if(cond==='sectorWins2')return p.sectorWins>=2;
   return false;
 }
 function youCompleteMissions(){
