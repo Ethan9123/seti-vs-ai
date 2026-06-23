@@ -46,7 +46,7 @@
   .tag{font-size:11px;padding:2px 7px;border-radius:7px;background:rgba(8,18,40,.7);border:1px solid var(--line);color:var(--muted)}
   .tag b{color:var(--ink)}
   /* map */
-  #mapWrap{position:relative;background:radial-gradient(circle at 50% 46%, #0a1a3a 0%, #060c1c 70%);border:1px solid var(--line);overflow:hidden}
+  #mapWrap{position:relative;background:radial-gradient(circle at 50% 46%, #0a1a3a 0%, #060c1c 70%);border:1px solid var(--line);overflow:hidden;border-radius:16px;box-shadow:0 14px 40px rgba(0,0,0,.6), inset 0 1px 0 rgba(150,190,255,.13), inset 0 0 0 3px rgba(7,14,30,.7)}
   #mapWrap .hint{position:relative;z-index:2}
   svg{display:block;width:100%;height:auto;max-height:64vh}
   .space{transition:.12s}
@@ -125,6 +125,7 @@
   .handRow::-webkit-scrollbar{height:8px}
   /* 手牌卡 */
   .hcard{flex:none;width:132px;border-radius:10px;border:1px solid var(--line);background:#0a1428;overflow:hidden;position:relative;
+    box-shadow:0 3px 9px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.06);
     transition:transform .16s cubic-bezier(.2,.9,.3,1.2),box-shadow .16s,border-color .16s;cursor:default}
   .hcard img{width:132px;display:block}
   .hcard .hcap{display:flex;align-items:center;gap:4px;justify-content:center;padding:3px 0;font-size:12px;font-weight:800;background:linear-gradient(180deg,#0c1d3e,#0a1428)}
@@ -3413,10 +3414,14 @@ const PLANET_GRAD={
 };
 function planetGfx(body,x,y,r){
   let pre='', post='';
-  if(body==='saturn'){ pre=`<ellipse cx="${x}" cy="${y}" rx="${r*1.85}" ry="${r*0.52}" fill="none" stroke="#ecdca6" stroke-width="${(r*0.22).toFixed(1)}" opacity=".85" transform="rotate(-20 ${x} ${y})"/>`; }
-  let s=`<circle cx="${x}" cy="${y}" r="${r}" fill="url(#pg_${body})" stroke="rgba(255,255,255,.3)" stroke-width="1"/>`;
+  // 落影：行星像实体一样"浮"在桌面上
+  pre+=`<ellipse cx="${x}" cy="${(y+r*0.92).toFixed(1)}" rx="${(r*0.9).toFixed(1)}" ry="${(r*0.26).toFixed(1)}" fill="rgba(0,0,0,.3)"/>`;
+  if(body==='saturn'){ pre+=`<ellipse cx="${x}" cy="${y}" rx="${r*1.85}" ry="${r*0.52}" fill="none" stroke="#ecdca6" stroke-width="${(r*0.22).toFixed(1)}" opacity=".85" transform="rotate(-20 ${x} ${y})"/>`; }
+  let s=`<circle cx="${x}" cy="${y}" r="${r}" fill="url(#pg_${body})" stroke="rgba(255,255,255,.26)" stroke-width="1"/>`;
   if(body==='jupiter'){ post=`<g clip-path="url(#clip_jup)"><ellipse cx="${x}" cy="${y-r*0.32}" rx="${r}" ry="${r*0.15}" fill="#b07a4a" opacity=".55"/><ellipse cx="${x}" cy="${y+r*0.22}" rx="${r}" ry="${r*0.17}" fill="#8a5a30" opacity=".5"/><circle cx="${x+r*0.28}" cy="${y+r*0.2}" r="${r*0.2}" fill="#d0654a" opacity=".75"/></g>`;
     s=`<clipPath id="clip_jup"><circle cx="${x}" cy="${y}" r="${r}"/></clipPath>`+s; }
+  // 3D 球体感：明暗交界 + 左上高光
+  post+=`<circle cx="${x}" cy="${y}" r="${r}" fill="url(#term)" pointer-events="none"/><circle cx="${x}" cy="${y}" r="${r}" fill="url(#specHi)" pointer-events="none"/>`;
   return pre+s+post;
 }
 function renderMap(){
@@ -3429,7 +3434,11 @@ function renderMap(){
     <radialGradient id="sun" cx="42%" cy="38%"><stop offset="0%" stop-color="#fff6cf"/><stop offset="45%" stop-color="#ffc24a"/><stop offset="80%" stop-color="#f08a1e"/><stop offset="100%" stop-color="#b8480f"/></radialGradient>
     <radialGradient id="sunGlow"><stop offset="0%" stop-color="rgba(255,180,60,.5)"/><stop offset="100%" stop-color="rgba(255,150,40,0)"/></radialGradient>
     <radialGradient id="core" cx="50%" cy="50%"><stop offset="0%" stop-color="#0a1832"/><stop offset="70%" stop-color="#0a1530"/><stop offset="100%" stop-color="#0c1f44"/></radialGradient>
-    <filter id="glow"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+    <filter id="glow"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <radialGradient id="coreGlow" cx="50%" cy="50%"><stop offset="0%" stop-color="rgba(255,170,74,.30)"/><stop offset="40%" stop-color="rgba(208,118,42,.13)"/><stop offset="78%" stop-color="rgba(30,22,52,0)"/></radialGradient>
+    <radialGradient id="term" cx="37%" cy="30%"><stop offset="50%" stop-color="rgba(0,0,0,0)"/><stop offset="100%" stop-color="rgba(0,0,14,.52)"/></radialGradient>
+    <radialGradient id="vig" cx="50%" cy="47%" r="64%"><stop offset="55%" stop-color="rgba(0,0,0,0)"/><stop offset="100%" stop-color="rgba(2,5,14,.52)"/></radialGradient>
+    <radialGradient id="specHi" cx="36%" cy="28%"><stop offset="0%" stop-color="rgba(255,255,255,.5)"/><stop offset="22%" stop-color="rgba(255,255,255,.08)"/><stop offset="50%" stop-color="rgba(255,255,255,0)"/></radialGradient>`;
   for(const [b,[a,c]] of Object.entries(PLANET_GRAD)){
     defs+=`<radialGradient id="pg_${b}" cx="38%" cy="32%"><stop offset="0%" stop-color="${a}"/><stop offset="100%" stop-color="${c}"/></radialGradient>`;
   }
@@ -3437,11 +3446,20 @@ function renderMap(){
   let svg=`<svg viewBox="0 0 560 600" xmlns="http://www.w3.org/2000/svg">`+defs;
   svg+=`<rect x="0" y="0" width="560" height="600" fill="url(#core)"/>`;
   svg+=starField();
-  // 得分轨道（外圈装饰）
-  svg+=`<circle cx="${CX}" cy="${CY}" r="${TRACK}" fill="none" stroke="#2f7fd6" stroke-width="13" opacity=".5"/>`;
-  svg+=`<circle cx="${CX}" cy="${CY}" r="${TRACK}" fill="none" stroke="#1a4e8c" stroke-width="13" stroke-dasharray="2 7" opacity=".55"/>`;
-  // 金色里程碑标记
-  [25,50,70].forEach((m,i)=>{ const a=(-90+(m/100)*360)*Math.PI/180; const x=CX+TRACK*Math.cos(a),y=CY+TRACK*Math.sin(a); svg+=`<circle cx="${x}" cy="${y}" r="6" fill="#f5cd6a" stroke="#7a5800"/>`; });
+  // 暖色"太阳系核心"辉光（仿真实棋盘：中心橙色发光盘）
+  svg+=`<circle cx="${CX}" cy="${CY}" r="${RR[2]+14}" fill="url(#coreGlow)"/>`;
+  // 得分轨道（仿真实棋盘的数字计分环：暗底盘 + 蓝环 + 刻度 + 每10一数字）
+  svg+=`<circle cx="${CX}" cy="${CY}" r="${TRACK}" fill="none" stroke="#0b1a36" stroke-width="20"/>`;
+  svg+=`<circle cx="${CX}" cy="${CY}" r="${TRACK}" fill="none" stroke="#2a6fc4" stroke-width="15" opacity=".85"/>`;
+  svg+=`<circle cx="${CX}" cy="${CY}" r="${(TRACK+7.5).toFixed(1)}" fill="none" stroke="#091628" stroke-width="1.4"/><circle cx="${CX}" cy="${CY}" r="${(TRACK-7.5).toFixed(1)}" fill="none" stroke="#091628" stroke-width="1.4"/>`;
+  for(let m=0;m<=100;m+=5){
+    const a=(-90+(m/100)*360)*Math.PI/180, co=Math.cos(a), si=Math.sin(a), big=(m%10===0);
+    svg+=`<line x1="${(CX+(TRACK-7)*co).toFixed(1)}" y1="${(CY+(TRACK-7)*si).toFixed(1)}" x2="${(CX+(TRACK+7)*co).toFixed(1)}" y2="${(CY+(TRACK+7)*si).toFixed(1)}" stroke="${big?'#cfe0ff':'#6f93cc'}" stroke-width="${big?1.5:0.8}" opacity=".7"/>`;
+    if(big && m>0 && m<100){ const lr=TRACK-16; svg+=`<text x="${(CX+lr*co).toFixed(1)}" y="${(CY+lr*si+3).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#cfe0ff" opacity=".9">${m}</text>`; }
+  }
+  // 金色里程碑标记（25/50/70 ★）
+  [25,50,70].forEach(m=>{ const a=(-90+(m/100)*360)*Math.PI/180, x=CX+TRACK*Math.cos(a), y=CY+TRACK*Math.sin(a);
+    svg+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="#f7d06a" stroke="#7a5800" stroke-width="1.4" filter="url(#glow)"/><text x="${x.toFixed(1)}" y="${(y+3).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="800" fill="#5a3d00">★</text>`; });
   // 半人马「讯息里程碑」：每位发现者的待领格在分数轨上画 📡（模拟讯息发出后需 +15 分时延才返回）
   const trackXY=(score)=>{ const a=(-90+(Math.min(score,100)/100)*360)*Math.PI/180; return [CX+TRACK*Math.cos(a), CY+TRACK*Math.sin(a)]; };
   G.players.forEach(p=>{ if(p.msgBase===undefined)return;
@@ -3461,7 +3479,9 @@ function renderMap(){
     const [x,y]=nodeXY({ring:-1}); const isR=reach.has('e');
     svg+=`<g class="space ${isR?'reach':''}" id="planet_earth" onclick="onSpaceClick(-1,0)">`;
     if(isR) svg+=`<circle class="hl" cx="${x}" cy="${y}" r="20" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="3 3" opacity=".9"/>`;
+    svg+=`<ellipse cx="${x}" cy="${y+13}" rx="13" ry="3.6" fill="rgba(0,0,0,.3)"/>`;
     svg+=`<circle cx="${x}" cy="${y}" r="14" fill="url(#pg_earth)" stroke="#bfe2ff" stroke-width="1.4"/>`;
+    svg+=`<circle cx="${x}" cy="${y}" r="14" fill="url(#term)" pointer-events="none"/><circle cx="${x}" cy="${y}" r="14" fill="url(#specHi)" pointer-events="none"/>`;
     svg+=`<text x="${x}" y="${y+3.5}" class="small-label" fill="#06203a">地球</text></g>`;
   }
   // 各环格位（每环包一个 <g>，旋转时用 animateTransform 让该环可见地转动）
@@ -3521,6 +3541,7 @@ function renderMap(){
     });
   }
   if(rotAnim) G._rotAnim=null; if(G._moveAnim) G._moveAnim=null;  // 一次性：动画只播一次
+  svg+=`<rect x="0" y="0" width="560" height="600" fill="url(#vig)" pointer-events="none"/>`;  // 暗角：桌面纵深感
   svg+=`<text x="10" y="592" font-size="10" fill="#7f95c4">▲ 你　▲ AI　·　拖动你的探测器到高亮格移动（或点击选中再点格）　·　粉点=访问得公关</text>`;
   svg+=`</svg>`;
   $('svgHolder').innerHTML=svg;
