@@ -6,7 +6,7 @@
 <title>SETI · 搜寻地外文明 — 单人对战 AI</title>
 <style>
   :root{
-    --bg:#05080f; --panel:rgba(13,24,46,.82); --panel2:rgba(9,18,38,.86); --line:#2b4a7a;
+    --bg:#05080f; --panel:rgba(13,24,46,.93); --panel2:rgba(9,18,38,.95); --line:#2b4a7a;
     --line2:#3f6bb0; --ink:#e6eeff; --muted:#93a8d4; --gold:#f5cd6a; --goldsoft:#d9a94a;
     --good:#54d18a; --bad:#ff6b6b; --cyan:#46c7e6;
     --cred:#f2c542; --energy:#54d18a; --pub:#ff79c6; --data:#52b9ff; --vp:#b794ff; --move:#7fe6c8;
@@ -25,7 +25,7 @@
   h1,h2,h3{margin:0 0 6px}
   #app{display:grid;grid-template-columns:304px 1fr 326px;gap:11px;padding:11px;min-height:100vh;align-items:start}
   .panel{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 13px;margin-bottom:11px;
-    box-shadow:0 8px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(120,170,255,.07);backdrop-filter:blur(3px)}
+    box-shadow:0 8px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(120,170,255,.07)}
   .panel h3{font-size:12.5px;letter-spacing:1.2px;color:var(--gold);text-transform:uppercase;
     border-bottom:1px solid rgba(120,170,255,.18);padding-bottom:5px;text-shadow:0 0 12px rgba(245,205,106,.35);display:flex;align-items:center;gap:6px}
   .panel h3::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold)}
@@ -63,7 +63,12 @@
   /* sectors */
   .sector{background:linear-gradient(180deg,rgba(10,22,46,.8),rgba(7,15,32,.85));border:1px solid var(--line);border-radius:10px;padding:6px 9px;margin-bottom:6px}
   .slot{display:inline-block;width:15px;height:15px;border-radius:4px;border:1px solid var(--line);margin-right:3px;vertical-align:middle;background:rgba(40,70,130,.25)}
-  .dot{display:inline-block;width:13px;height:13px;border-radius:50%;margin-right:3px}
+  .dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:3px;vertical-align:middle;
+       box-shadow:inset 0 1.5px 2px rgba(255,255,255,.55),inset 0 -2px 3px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.55)}
+  /* 顶栏「更多」下拉菜单 */
+  .moremenu{position:absolute;top:100%;right:0;margin-top:5px;background:#0c1730;border:1px solid #2a3f6a;border-radius:11px;
+    padding:6px;display:flex;flex-direction:column;gap:4px;z-index:40;box-shadow:0 10px 30px rgba(0,0,0,.55);min-width:148px}
+  .moremenu button{text-align:left;width:100%}
   /* real cards */
   .rcard{width:128px;border-radius:9px;border:1px solid var(--line);background:#0a1428;cursor:pointer;transition:.14s;overflow:hidden;position:relative}
   .rcard:hover{border-color:#6fb0ff;transform:translateY(-3px);box-shadow:0 8px 22px rgba(40,110,230,.45)}
@@ -106,8 +111,8 @@
   /* ===== 常驻手牌坞 ===== */
   #app{padding-bottom:236px}
   #handDock{position:fixed;left:0;right:0;bottom:0;z-index:30;height:224px;
-    background:linear-gradient(180deg,rgba(8,14,30,.7),rgba(6,10,22,.96) 30%);
-    border-top:1px solid var(--line2);box-shadow:0 -10px 40px rgba(0,0,0,.55);backdrop-filter:blur(6px)}
+    background:linear-gradient(180deg,rgba(8,14,30,.92),rgba(6,10,22,.97) 30%);
+    border-top:1px solid var(--line2);box-shadow:0 -10px 40px rgba(0,0,0,.55)}
   #dockInner{display:flex;gap:12px;height:100%;padding:8px 12px 10px}
   #handSection{flex:1;min-width:0;display:flex;flex-direction:column}
   #rowSection{width:430px;flex:none;display:flex;flex-direction:column;border-left:1px solid rgba(120,170,255,.15);padding-left:12px}
@@ -216,7 +221,7 @@
 <div id="app">
   <!-- LEFT: you -->
   <div id="left">
-    <div class="panel">
+    <div class="panel" id="youPanel">
       <h3>你的航天机构 <span class="dot" id="youDot" style="background:var(--probe)"></span><span id="youFirst"></span></h3>
       <div class="row" id="youRes"></div>
       <div class="row" style="margin-top:7px">
@@ -258,18 +263,21 @@
         <div class="small muted" style="margin-top:2px">第 <b id="roundNo">1</b> / <b id="roundMax">5</b> 回合 · <span id="turnBadge" class="turnbadge yourturn">你的回合</span>
           · <span id="rotInfo" style="cursor:help;border-bottom:1px dotted var(--muted)" title="太阳系旋转规则（点击查看）" onclick="showRotationHelp()">🌀 下次旋转：<b id="rotDisc">①仅内盘</b> ⓘ</span></div>
       </div>
-      <div class="row">
-        <button class="small gold" onclick="startTutorial()">📖 教程</button>
-        <button class="small" onclick="showCheatSheet()">📋 速查</button>
-        <button class="small" onclick="showStrategy()">📈 攻略</button>
+      <div class="row" style="position:relative">
+        <button class="small" onclick="showCheatSheet()" title="速查：所有主行动 + 自由行动">📋 速查</button>
         <button class="small" onclick="showCardDex()" title="卡牌图鉴：浏览/筛选全部 200 张卡牌（基础+扩展+快速开始）">🗂 图鉴</button>
-        <button class="small" onclick="showPlanetaryBoard()">🪐 行星板</button>
-        <button class="small" onclick="showRealBoard()">真实棋盘</button>
         <button class="small" onclick="undoTurn()" title="撤销本回合的操作，回到回合开始（自动存档，刷新/关页不丢局）">↶ 悔棋</button>
-        <button class="small" onclick="showHelp()">规则/说明</button>
-        <button class="small" id="sfxBtn" onclick="SFX.toggle()" title="开关音效（发射/着陆/扫描/扇区/外星发现/里程碑等）">🔊 音效</button>
-        <button class="small" onclick="exportReplay()" title="把本局完整日志导出为文本文件（复盘/分享）">📥 复盘</button>
+        <button class="small" onclick="showHelp()">规则</button>
+        <button class="small" onclick="toggleMoreMenu(event)" title="更多功能">⋯ 更多</button>
         <button class="small" onclick="startScreen()">重开</button>
+        <div class="moremenu" id="moreMenu" style="display:none">
+          <button class="small gold" onclick="startTutorial();closeMoreMenu()">📖 教程</button>
+          <button class="small" onclick="showStrategy();closeMoreMenu()">📈 攻略</button>
+          <button class="small" onclick="showPlanetaryBoard();closeMoreMenu()">🪐 行星板</button>
+          <button class="small" onclick="showRealBoard();closeMoreMenu()">🗺 真实棋盘</button>
+          <button class="small" id="sfxBtn" onclick="SFX.toggle()" title="开关音效（发射/着陆/扫描/扇区/外星发现/里程碑等）">🔊 音效</button>
+          <button class="small" onclick="exportReplay();closeMoreMenu()" title="把本局完整日志导出为文本文件（复盘/分享）">📥 复盘</button>
+        </div>
       </div>
     </div>
     <div class="panel" id="mapWrap">
@@ -3093,7 +3101,7 @@ function narrate(p,action,phase,ctx){
 /* ---- 面板 UI ---- */
 const SPEC_CSS=`#specPanel{position:fixed;left:50%;top:8px;transform:translateX(-50%);width:min(640px,94vw);z-index:90;
  background:linear-gradient(180deg,#0d1f3aF2,#0a1730F2);border:1px solid #2a4f86;border-radius:12px;box-shadow:0 8px 30px #000a;
- padding:9px 12px;font-size:13.5px;color:#dce8fb;backdrop-filter:blur(3px)}
+ padding:9px 12px;font-size:13.5px;color:#dce8fb}
 #specPanel .sphd{display:flex;align-items:center;gap:8px;font-weight:800}
 #specPanel .spdot{width:13px;height:13px;border-radius:50%;box-shadow:0 0 8px currentColor;flex:0 0 auto}
 #specBarWrap{height:7px;background:#0a1424;border-radius:5px;overflow:hidden;margin:6px 0}
@@ -4186,7 +4194,8 @@ function firstPlayerBadge(idx){
 function renderPlayers(){
   const you=G.players[0];
   renderRes('youRes',you);
-  { const d=$('youDot'); if(d) d.style.background=pcolor(0); const f=$('youFirst'); if(f) f.innerHTML=firstPlayerBadge(0); }
+  { const d=$('youDot'); if(d) d.style.background=pcolor(0); const f=$('youFirst'); if(f) f.innerHTML=firstPlayerBadge(0);
+    const yp=$('youPanel'); if(yp){ yp.style.borderTop='3px solid '+pcolor(0); yp.style.borderColor=pcolor(0)+'66'; yp.style.borderTopColor=pcolor(0); } }
   $('youOrb').textContent=you.orbiters; $('youLand').textContent=you.landers; $('youWins').textContent=you.sectorWins;
   // 对手面板（1-3 个，各自颜色/难度）
   let html='';
@@ -4195,7 +4204,7 @@ function renderPlayers(){
     const kind = ai.aiMode==='rival'?('🤖Rival'+ai.rivalDiff+'★'):(ai.aiMode==='neural'?'🧠全局AI':ai.aiMode==='alphazero'?'🏆AlphaZero':'⚙️启发式');
     const turn = (G.active===i && !ai.passed && !G.over)?' <span style="color:'+col+'">◀行动中</span>':(ai.passed?' <span style="color:#e88">已跳过</span>':'');
     const tech=ai.techs.probe.length+ai.techs.tele.length+ai.techs.comp.length;
-    html+=`<div class="panel" style="border-color:${col}66;margin-bottom:8px">
+    html+=`<div class="panel" style="border-color:${col}66;border-top:3px solid ${col};margin-bottom:8px">
       <h3 style="display:flex;justify-content:space-between;align-items:center"><span>${ai.name} <span class="dot" style="background:${col}"></span>${firstPlayerBadge(i)}</span><span class="small" style="color:${col}">${kind}${turn}</span></h3>
       <div class="row" id="oppRes${i}"></div>
       <div class="row" style="margin-top:6px">
@@ -4274,6 +4283,12 @@ function _modalCancel(){
   if(!G.over) renderAll();
 }
 function closeModal(){ $('modalbg').style.display='none'; _modalCb=null; }
+function toggleMoreMenu(e){ if(e&&e.stopPropagation)e.stopPropagation(); const m=$('moreMenu'); if(m) m.style.display = (m.style.display==='none'||!m.style.display)?'flex':'none'; }
+function closeMoreMenu(){ const m=$('moreMenu'); if(m) m.style.display='none'; }
+// 点击菜单外部时自动关闭（仅浏览器）
+if(typeof document!=='undefined' && document.addEventListener){
+  document.addEventListener('click',function(e){ const m=$('moreMenu'); if(m && m.style.display==='flex' && !m.contains(e.target)) closeMoreMenu(); });
+}
 // 简易确认（用于望远镜可选项）——同步 confirm
 function confirmAsk(msg){ return window.confirm(msg); }
 
