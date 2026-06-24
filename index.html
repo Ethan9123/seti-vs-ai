@@ -65,6 +65,12 @@
   .slot{display:inline-block;width:15px;height:15px;border-radius:4px;border:1px solid var(--line);margin-right:3px;vertical-align:middle;background:rgba(40,70,130,.25)}
   .dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:3px;vertical-align:middle;
        box-shadow:inset 0 1.5px 2px rgba(255,255,255,.55),inset 0 -2px 3px rgba(0,0,0,.5),0 1px 2px rgba(0,0,0,.55)}
+  /* 移动端「跳到手牌 / 回棋盘」浮动按钮 */
+  #jumpFab{position:fixed;right:11px;bottom:14px;z-index:46;border:1px solid #5aa0ff;border-radius:24px;
+    background:linear-gradient(180deg,#1f4e9e,#15306a);color:#eaf2ff;font-weight:800;font-size:14px;
+    padding:10px 16px;box-shadow:0 5px 18px rgba(0,0,0,.6);cursor:pointer;letter-spacing:.5px}
+  #jumpFab:active{transform:scale(.95)}
+  @media(min-width:760px){ #jumpFab{display:none!important} }
   /* 顶栏「更多」下拉菜单 */
   .moremenu{position:absolute;top:100%;right:0;margin-top:5px;background:#0c1730;border:1px solid #2a3f6a;border-radius:11px;
     padding:6px;display:flex;flex-direction:column;gap:4px;z-index:40;box-shadow:0 10px 30px rgba(0,0,0,.55);min-width:148px}
@@ -328,6 +334,8 @@
     </div>
   </div>
 </div>
+
+<button id="jumpFab" onclick="jumpToHand()" style="display:none">🃏 手牌</button>
 
 <div id="modalbg"><div id="modal"></div></div>
 
@@ -4236,6 +4244,7 @@ function renderAll(){
   renderMap(); renderPlayers(); renderComputer(); renderTrace(); renderTech(); renderMissions(); renderLongTerm();
   renderSectors(); renderAliens(); renderGold(); renderHand(); renderCardRow(); renderActions(); renderLog(); renderDockRes();
   if(G && G._tut && $('tutBox')) tutTick();   // 剧情教程：每次重绘后推进/刷新引导
+  updateJumpFab();   // 移动端「跳到手牌」浮钮
 }
 
 /* ===========================================================
@@ -4289,6 +4298,28 @@ function _modalCancel(){
 function closeModal(){ $('modalbg').style.display='none'; _modalCb=null; }
 function toggleMoreMenu(e){ if(e&&e.stopPropagation)e.stopPropagation(); const m=$('moreMenu'); if(m) m.style.display = (m.style.display==='none'||!m.style.display)?'flex':'none'; }
 function closeMoreMenu(){ const m=$('moreMenu'); if(m) m.style.display='none'; }
+// 移动端：一键在「棋盘/行动」和「手牌」之间跳转
+function jumpToHand(){
+  const dock=$('handDock'); if(!dock)return;
+  const atHand = window.scrollY > dock.offsetTop - window.innerHeight*0.6;
+  if(atHand) window.scrollTo({top:0,behavior:'smooth'});
+  else dock.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function updateJumpFab(){
+  const fab=$('jumpFab'); if(!fab)return;
+  const mb=$('modalbg');
+  const inGame=(typeof G!=='undefined')&&G&&!G.over&&(!mb||mb.style.display!=='flex');
+  const mobile=(window.innerWidth||999)<760;
+  if(!(inGame&&mobile)){ fab.style.display='none'; return; }
+  fab.style.display='block';
+  const dock=$('handDock');
+  const atHand=dock&&window.scrollY>dock.offsetTop-window.innerHeight*0.6;
+  fab.textContent=atHand?'⬆ 棋盘':'🃏 手牌';
+}
+if(typeof window!=='undefined'&&window.addEventListener){
+  window.addEventListener('scroll',updateJumpFab,{passive:true});
+  window.addEventListener('resize',updateJumpFab);
+}
 // 点击菜单外部时自动关闭（仅浏览器）
 if(typeof document!=='undefined' && document.addEventListener){
   document.addEventListener('click',function(e){ const m=$('moreMenu'); if(m && m.style.display==='flex' && !m.contains(e.target)) closeMoreMenu(); });
