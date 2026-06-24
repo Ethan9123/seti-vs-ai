@@ -326,6 +326,7 @@
 <script src="cards_data.js"></script>
 <script src="sa_cards.js"></script>
 <script src="quickstart_cards.js"></script>
+<script src="flavor_data.js"></script>
 <script src="ai_nn.js"></script>
 <script src="ai_weights.js"></script>
 <script src="az_nn.js"></script>
@@ -941,7 +942,7 @@ function newGame(opts){
   const goldTiles=GOLD_DEFS.map(g=>{const side=rng(2)?g.a:g.b;return {key:side.key,name:side.name,marks:[]};});
   G={
     round:1, maxRound: orgMode?4:5, startPlayer, active:startPlayer,  // 官方：组织模式 4 回合，经典 5 回合
-    mode:opts.mode, aiMode:opts.aiMode||'heuristic', rivalDiff:rivalDiff, rivalDeck:null,
+    mode:opts.mode, aiMode:opts.aiMode||'heuristic', rivalDiff:rivalDiff, rivalDeck:null, rivalSpeciesUnlocked:[],
     rotation:0,            // 0/1/2 下次旋转哪个 disc
     players:players,
     rings:freshRings(),
@@ -1379,6 +1380,7 @@ function maybeDiscover(al){
     if(!SIM && G._tut){ G._tutDiscovered=al; tutAlienConcept(al); }   // 剧情教程：发现外星人时弹出讲解
     const sp=al.species;
     logS('★ 外星物种被发现：'+al.name+'！'+(sp?sp.pdesc:'')+' '+al.bonus.desc);
+    if(sp) rivalUnlockSpecies(sp.key);   // 官方：物种被发现→Rival 解锁其专属行动卡
     for(let who=0;who<G.players.length;who++){
       const owners=Object.values(al.slots).filter(x=>x===who).length;
       if(owners>0){
@@ -2484,7 +2486,8 @@ function aiFreePhase(p){
    每回合翻开一张行动卡，按卡上顺序执行第一个可行的动作（参考规则书 S.1–S.4 流程）。*/
 /* 官方 19 张 Rival 行动卡（rivalActionCards.ts）：tier 0=基础(S.1-4) / 1=进阶(S.5-14) / 2=物种专属(S.15-19)。
    每张含 3 个候选行动（按序取首个可行）+ 每回合奖励 rw（PROGRESS_1≈+1分, VP_3=+3分, PUBLICITY_1=+1公关）。
-   难度决定牌库构成：1=仅基础, 2-3=基础+进阶, 4-5=全部 19 张（奖励更多→更强）。*/
+   难度决定基础/进阶构成：1=仅基础, 2-5=基础+进阶（奖励更多→更强）；
+   物种专属(S.15-19)不再按难度门控，改为官方规则的"物种被发现时解锁"（见 buildRivalDeck/rivalUnlockSpecies）。*/
 const RIVAL_CARDS=[
   {id:'S.1', tier:0, acts:['analyze','launch','tech','fly'], rw:{publicity:1}},
   {id:'S.2', tier:0, acts:['analyze','tech','scan'], rw:{}},
@@ -2500,17 +2503,34 @@ const RIVAL_CARDS=[
   {id:'S.12',tier:1, acts:['tech','launch','fly'], rw:{vp:2,publicity:1}},
   {id:'S.13',tier:1, acts:['fly','analyze','scan'], rw:{vp:3}},
   {id:'S.14',tier:1, acts:['launch','tech','scan'], rw:{vp:1,publicity:1}},
-  {id:'S.15',tier:2, acts:['launch','fly','fly'], rw:{publicity:1}},
-  {id:'S.16',tier:2, acts:['trace','tech'], rw:{vp:1}},
-  {id:'S.17',tier:2, acts:['fly','scan'], rw:{}},
-  {id:'S.18',tier:2, acts:['scan'], rw:{}},
-  {id:'S.19',tier:2, acts:['scan'], rw:{}},
+  {id:'S.15',tier:2, sp:'mascamites', acts:['launch','fly','fly'], rw:{publicity:1}},   // 马斯卡米特：采样
+  {id:'S.16',tier:2, sp:'anomalies', acts:['trace','tech'], rw:{vp:1}},                  // 幽光异象：标记痕迹
+  {id:'S.17',tier:2, sp:'oumuamua', acts:['fly','scan'], rw:{}},                          // 奥陌陌：飞向访客
+  {id:'S.18',tier:2, sp:'centaurians', acts:['scan'], rw:{}},                             // 半人马：讯息倒计时
+  {id:'S.19',tier:2, sp:'exertians', acts:['scan'], rw:{}},                               // 埃克塞尔：危险卡
 ];
+// 官方规则(2.2 step4)：5 张物种专属卡(S.15-19)平时置于一旁，当对应物种【被发现】时才替换入 Rival 牌库。
+// → 不再用难度门控 tier2；改为按 G.rivalSpeciesUnlocked（发现时解锁、且该物种在本局登场）动态加入。
 function buildRivalDeck(){
   if(G.rivalDeck && G.rivalDeck.length) return;
   const diff=G.rivalDiff||3;
-  const pool=RIVAL_CARDS.filter(c=> c.tier===0 || (c.tier===1&&diff>=2) || (c.tier===2&&diff>=4));
+  const unlocked=G.rivalSpeciesUnlocked||[];
+  const pool=RIVAL_CARDS.filter(c=> c.tier===0 || (c.tier===1&&diff>=2) || (c.tier===2&&unlocked.includes(c.sp)));
   G.rivalDeck=shuffle(pool.map(c=>c));
+}
+// 物种被发现时解锁其 Rival 专属卡（仅当本局存在 Rival 自动机时生效）
+function rivalUnlockSpecies(spKey){
+  if(SIM || !spKey) return;
+  if(!G.players.some(pl=>pl.aiMode==='rival')) return;
+  G.rivalSpeciesUnlocked=G.rivalSpeciesUnlocked||[];
+  if(G.rivalSpeciesUnlocked.includes(spKey)) return;
+  const card=RIVAL_CARDS.find(c=>c.tier===2 && c.sp===spKey);
+  if(!card) return;
+  G.rivalSpeciesUnlocked.push(spKey);
+  if(G.rivalDeck && !G.rivalDeck.some(c=>c.id===card.id)){        // 立即洗入当前牌库（不必等下次重建）
+    G.rivalDeck.splice(rng(G.rivalDeck.length+1),0,card);
+  }
+  logS('★ Rival 解锁物种专属行动卡 '+card.id+'（'+spKey+'）。');
 }
 function rivalTry(p,act){
   if(act==='analyze'){ if(computerTopFull(p)&&p.energy>=1) return {a:'analyze'}; return null; }
@@ -3708,6 +3728,26 @@ function renderComputer(){
   });
   $('youComp').innerHTML=h;
 }
+// 历史背景趣闻（per-card flavor，纯展示，来自官方中文 flavorText.json）
+function flavorText(src,idnum){
+  const F=window.FLAVOR; if(!F||idnum==null)return'';
+  if(src==='alien') return (F.alien&&F.alien[idnum])||''; // 外星卡按 ET.N 字符串键
+  const n=Number(idnum); if(!isFinite(n))return'';
+  if(src==='sa') return (F.sa&&F.sa[n])||'';
+  return (F.base&&F.base[n])||''; // base 卡按编号 n
+}
+// 把卡牌对象解析成 flavor（base 用 c.n；SA 用 said 'SA.N'；外星卡用 et 'ET.N'）
+function flavorOf(c){
+  if(!c)return'';
+  if(c.et) return flavorText('alien',c.et);
+  if(c.said){ const m=String(c.said).match(/SA\.(\d+)/i); return m?flavorText('sa',m[1]):''; }
+  if(c.n!=null) return flavorText('base',c.n);
+  return '';
+}
+function flavorHTML(c,muted){
+  const t=flavorOf(c); if(!t)return'';
+  return `<div class="cardflav" style="margin-top:5px;padding-top:5px;border-top:1px dashed #2a3f6a;font-size:11px;line-height:1.5;color:${muted?'#8aa0c4':'#a9c0e0'};font-style:italic">📜 ${t}</div>`;
+}
 function fxText(fx){
   if(!fx)return'';
   const a=[];
@@ -3815,8 +3855,8 @@ function showStrategy(){
 let _dex={src:'all',col:'all',cor:'all',q:''};
 function _dexAll(){
   const out=[];
-  (window.REALCARDS||[]).forEach(c=>out.push({src:'base',id:'#'+c.n,name:c.name,cols:c.cols,cost:c.cost,inc:c.inc,corner:c.corner,fx:c.fx,note:c.note}));
-  (window.SA_CARDS||[]).forEach(c=>out.push({src:'sa',id:c.said,name:c.name,cols:c.cols,cost:c.cost,inc:c.inc,corner:c.corner,fx:c.fx,note:c.note}));
+  (window.REALCARDS||[]).forEach(c=>out.push({src:'base',n:c.n,id:'#'+c.n,name:c.name,cols:c.cols,cost:c.cost,inc:c.inc,corner:c.corner,fx:c.fx,note:c.note}));
+  (window.SA_CARDS||[]).forEach(c=>out.push({src:'sa',said:c.said,id:c.said,name:c.name,cols:c.cols,cost:c.cost,inc:c.inc,corner:c.corner,fx:c.fx,note:c.note}));
   (window.QUICKSTART_CARDS||[]).forEach(c=>{const pk=c.place&&c.place.kind; const pn={trace:'放置·发现痕迹',orbiter:'放置·轨道器',signal:'放置·信号',none:'无放置'}[pk]||(pk||''); out.push({src:'qs',id:c.srid,name:c.name,cols:null,cost:null,inc:null,corner:null,fx:c.reward,note:pn});});
   return out;
 }
@@ -3825,7 +3865,7 @@ function _dexList(){
   if(_dex.src!=='all') list=list.filter(c=>c.src===_dex.src);
   if(_dex.col!=='all') list=list.filter(c=>c.cols&&c.cols.includes(_dex.col));
   if(_dex.cor!=='all') list=list.filter(c=>c.corner===_dex.cor);
-  if(_dex.q){const q=_dex.q.trim().toLowerCase(); if(q) list=list.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.id||'').toLowerCase().includes(q)||(c.note||'').toLowerCase().includes(q));}
+  if(_dex.q){const q=_dex.q.trim().toLowerCase(); if(q) list=list.filter(c=>(c.name||'').toLowerCase().includes(q)||(c.id||'').toLowerCase().includes(q)||(c.note||'').toLowerCase().includes(q)||flavorOf(c).toLowerCase().includes(q));}
   return list;
 }
 function _dexListOnly(){
@@ -3846,6 +3886,7 @@ function _dexListOnly(){
       ${(c.inc||c.corner)?`<div class="small muted" style="margin-bottom:2px">${c.inc?'收入:'+incName(c.inc):''}${c.inc&&c.corner?' · ':''}${c.corner?'角标:'+cornerName(c.corner):''}</div>`:''}
       <div style="color:#bcd3f0">${eff||'—'}</div>
       ${extra?`<div class="small muted" style="margin-top:2px">${extra}</div>`:''}
+      ${flavorHTML(c,true)}
     </div>`;
   }
   h+=`</div>`;
@@ -3857,7 +3898,7 @@ function _renderDexShell(){
   const btn=(k,v,lbl)=>`<button class="small ${_dex[k]===v?'gold':''}" onclick="_dexSet('${k}','${v}')">${_dex[k]===v?'✓':''}${lbl}</button>`;
   const nB=(window.REALCARDS||[]).length, nS=(window.SA_CARDS||[]).length, nQ=(window.QUICKSTART_CARDS||[]).length;
   $('modal').innerHTML=`<h2>🗂 卡牌图鉴 · Card Explorer</h2>
-   <div class="small muted" style="margin-bottom:8px">浏览全部 ${nB+nS+nQ} 张卡牌（基础 ${nB} + 扩展 SA ${nS} + 快速开始 ${nQ}），按来源 / 扇区色 / 自由行动 / 名称筛选。对应官网 <b>seti.ender-wiggin.com</b> 的 Card Explorer。</div>
+   <div class="small muted" style="margin-bottom:8px">浏览全部 ${nB+nS+nQ} 张卡牌（基础 ${nB} + 扩展 SA ${nS} + 快速开始 ${nQ}），按来源 / 扇区色 / 自由行动 / 名称筛选。含每张卡的 📜 历史背景趣闻（搜索也覆盖背景文字）。对应官网 <b>seti.ender-wiggin.com</b> 的 Card Explorer。</div>
    <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">来源</span>${btn('src','all','全部')}${btn('src','base','基础')}${btn('src','sa','扩展SA')}${btn('src','qs','快速开始')}</div>
      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">扇区</span>${btn('col','all','全部')}${btn('col','r','🔴红')}${btn('col','b','🔵蓝')}${btn('col','y','🟡黄')}${btn('col','k','⚫黑')}</div>
@@ -3967,12 +4008,16 @@ function colSwatches(cols){ return (cols||[]).map(c=>`<span class="scol" style="
 function cardArt(c,w){
   if(c.n!=null) return `<img src="assets/cards/c${c.n}.jpg" alt="${c.name}" style="width:${w}px;border-radius:7px;display:block" loading="lazy" onerror="this.style.display='none'">`;
   if(c.sa){ const h=Math.round(w*1.38); const cc=c.cols&&c.cols[0]; const colHex={y:'#f2c542',r:'#ff6b5e',b:'#52b9ff',k:'#9b8cff'}[cc]||'#7fd0ff';
-    return `<div style="width:${w}px;height:${h}px;background:radial-gradient(circle at 50% 22%,${colHex}33,#0a1530 72%);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:7px;text-align:center;border-bottom:2px solid ${colHex};box-sizing:border-box">
+    const saN=(String(c.said||'').match(/SA\.(\d+)/)||[])[1];
+    // 自绘卡面作为后备层；真实官方 SA 卡面 webp 叠加其上（加载失败则自动显露后备层）
+    const face=`<div style="width:${w}px;height:${h}px;background:radial-gradient(circle at 50% 22%,${colHex}33,#0a1530 72%);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:7px;text-align:center;border-bottom:2px solid ${colHex};box-sizing:border-box">
       <div style="font-size:8px;color:${colHex};font-weight:800;letter-spacing:.5px">🛰 ${c.said} · 太空机构扩展</div>
       <div style="font-size:16px;margin:2px 0">🛰️</div>
       <div style="font-weight:800;font-size:10.5px;margin:2px 0;color:#fff;line-height:1.2">${c.name.split('·')[0].trim()}</div>
       <div style="font-size:8.5px;color:#bcd0ee;margin-bottom:3px">${(c.name.split('·')[1]||'').trim()}</div>
       <div style="font-size:9px;color:#cdd7f0;line-height:1.35;margin-top:auto">${c.note||''}</div></div>`;
+    if(saN) return `<div style="position:relative;width:${w}px;height:${h}px">${face}<img src="assets/cards/sa${saN}.webp" alt="${c.name}" style="position:absolute;inset:0;width:${w}px;height:${h}px;object-fit:cover;border-radius:7px;display:block" loading="lazy" onerror="this.style.display='none'"></div>`;
+    return face;
   }
   if(c.alien){ const h=Math.round(w*1.38); const clean=(c.note||'').replace('【'+c.alienName+'外星卡】','');
     return `<div style="width:${w}px;height:${h}px;background:radial-gradient(circle at 50% 25%,${c.alienColor}44,#0a1530 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7px;text-align:center;border-bottom:2px solid ${c.alienColor}">
@@ -4017,7 +4062,7 @@ function cardClick(i){
   }
   const detail=`<div style="display:flex;gap:12px"><div>${cardArt(c,220)}</div>
     <div style="max-width:300px"><b>${c.name}</b><div class="small muted" style="margin:4px 0">${colSwatches(c.cols)} 费 ${c.cost}¢ · 收入:${incName(c.inc)} · 角标:${cornerName(c.corner)}</div>
-    <div style="font-size:13px;line-height:1.5">${c.note||fxText(c.fx)}${c.mission?'<br>🎯任务：'+c.mission.desc:''}${c.endgame?'<br>🏅金框：'+c.endgame.name:''}</div></div></div>`;
+    <div style="font-size:13px;line-height:1.5">${c.note||fxText(c.fx)}${c.mission?'<br>🎯任务：'+c.mission.desc:''}${c.endgame?'<br>🏅金框：'+c.endgame.name:''}</div>${flavorHTML(c)}</div></div>`;
   const m=$('modal');
   m.innerHTML=`<h2>卡牌操作</h2>${detail}<div style="margin-top:12px">
     <button class="opt primary" ${p.credits<c.cost?'disabled':''} onclick="_cardAct(${i},'play')">作为主行动打出（费${c.cost}信用）${p.credits<c.cost?' [信用不足]':''}</button>
@@ -4054,7 +4099,8 @@ function flyCardAnim(n){
 }
 function showCardZoom(n){
   const m=$('modal');
-  m.innerHTML=`<h2>卡牌</h2><img src="assets/cards/c${n}.jpg" style="max-width:340px;border-radius:10px;display:block;margin:0 auto"><div style="margin-top:10px"><button class="opt" onclick="closeModal()">关闭</button></div>`;
+  const fl=flavorText('base',n);
+  m.innerHTML=`<h2>卡牌</h2><img src="assets/cards/c${n}.jpg" style="max-width:340px;border-radius:10px;display:block;margin:0 auto">${fl?`<div style="max-width:340px;margin:8px auto 0;font-size:12px;line-height:1.5;color:#a9c0e0;font-style:italic">📜 ${fl}</div>`:''}<div style="margin-top:10px"><button class="opt" onclick="closeModal()">关闭</button></div>`;
   $('modalbg').style.display='flex';
 }
 function showOrgZoom(idx){
