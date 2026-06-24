@@ -4014,8 +4014,12 @@ function renderAliens(){
 function renderGold(){
   let h='';
   G.goldTiles.forEach((t,i)=>{
-    const marks=t.marks.map((m,j)=>`<span class="tag" style="border-color:${pcolor(m)}">${pname(m)}×${GOLD_VALUES[j]}</span>`).join(' ');
-    h+=`<div style="margin-bottom:4px"><b>金板${i+1}</b> <span class="muted">${t.name}</span> ${marks}</div>`;
+    // 已认领标记 → 显示当前实时投影分（倍率 × 当前套数）
+    const marks=t.marks.map((m,j)=>{ const pj=G.players[m]; const val=GOLD_VALUES[j]||GOLD_VALUES[GOLD_VALUES.length-1]; const sets=pj?goldCount(pj,t.key):0;
+      return `<span class="tag" style="border-color:${pcolor(m)}" title="倍率 ${val} × ${sets} 套 = ${val*sets} 分">${pname(m)}×${val} <b style="color:var(--gold)">=${val*sets}</b></span>`; }).join(' ');
+    // 各家当前在该类别的可计分套数（帮助判断是否值得抢这块板）
+    const counts=G.players.map(p=>`<b style="color:${pcolor(p.idx)}">${goldCount(p,t.key)}</b>`).join('/');
+    h+=`<div style="margin-bottom:5px"><b>金板${i+1}</b> <span class="muted">${t.name}</span> <span class="small muted" title="各玩家当前可计分套数">［套 ${counts}］</span> ${marks}</div>`;
   });
   $('goldTiles').innerHTML=h;
 }
