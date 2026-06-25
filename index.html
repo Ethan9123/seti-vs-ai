@@ -47,6 +47,10 @@
     box-shadow:inset 0 2px 4px rgba(0,0,0,.42), inset 0 -1px 0 rgba(120,170,255,.10);  /* recessed readout well */
     font-family:var(--f-display);font-variant-numeric:tabular-nums}
   .res svg{width:16px;height:16px;display:block;flex:none}
+  /* score readout emphasis (borrowed from the official ResourceBar) — the win metric pops */
+  .res.res-score{font-size:14.5px;color:var(--gold);border-color:var(--goldsoft);
+    background:radial-gradient(ellipse at 50% 45%, rgba(245,205,106,.18), rgba(9,20,40,.92) 72%);
+    box-shadow:inset 0 0 12px rgba(245,205,106,.14), inset 0 -1px 0 rgba(245,205,106,.18)}
   button{font-family:inherit;cursor:pointer;border:1px solid var(--line);color:var(--ink);
     background:linear-gradient(180deg,#16305c,#0e1f3c);border-radius:9px;padding:8px 11px;font-size:13px;font-weight:700;transition:.13s;letter-spacing:.3px}
   button:hover:not(:disabled){border-color:var(--line2);box-shadow:0 0 14px rgba(80,140,240,.35);transform:translateY(-1px)}
@@ -416,7 +420,7 @@ const PLANETS={
   mars:   {name:'火星',en:'Mars',short:'火',orbit:{data:1,card:1},land:{trace:'land',vp:4,data:1},moons:['火卫一','火卫二']},
   jupiter:{name:'木星',en:'Jupiter',short:'木',orbit:{data:2,publicity:1},land:{trace:'land',vp:5,data:2},moons:['木卫一','木卫二','木卫三','木卫四']},
   saturn: {name:'土星',en:'Saturn',short:'土',orbit:{data:2,card:1},land:{trace:'land',vp:5,data:1},moons:['土卫二','土卫六']},
-  uranus: {name:'天王星',en:'Uranus',short:'天',orbit:{publicity:1,data:1,vp:1},land:{trace:'land',vp:6,data:1},moons:[]},
+  uranus: {name:'天王星',en:'Uranus',short:'天',orbit:{publicity:1,data:1,vp:1},land:{trace:'land',vp:6,data:1},moons:['天卫三']},
   neptune:{name:'海王星',en:'Neptune',short:'海',orbit:{data:2,publicity:1},land:{trace:'land',vp:6,data:2},moons:['海卫一']},
   // 冥王星促销卡（Pluto promo）：不在棋盘上、是每位玩家面前的一张卡。只要你有探测器在最外环(ring2)即可环绕/着陆冥王星。
   // 每人各有 1 个环绕位 + 1 个着陆位；环绕=1信用+1能量，着陆=3能量(已有环绕则2，可被橙色科技再-1)。奖励为合理近似（促销卡原文未给数值）。
@@ -1170,7 +1174,10 @@ function startScreen(){
      </div>`;
    }).join('');
   const aiSel=pcSel+oppSel;
-  m.innerHTML=`<h2>SETI · 搜寻地外文明</h2>
+  m.innerHTML=`<div style="position:relative;height:120px;margin:-20px -22px 14px;border-radius:14px 14px 0 0;overflow:hidden;background:#0a1428 url('assets/scenes/lobby.webp') center 40%/cover">
+     <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,22,.10) 38%,rgba(6,10,22,.92))"></div>
+     <div style="position:absolute;left:18px;bottom:9px"><div class="brand" style="font-size:24px;letter-spacing:3px;text-shadow:0 2px 14px #000">SETI</div><div class="small" style="color:#dbe6ff;letter-spacing:.14em;text-shadow:0 1px 6px #000">搜寻地外文明 · 单人对战 AI</div></div>
+   </div>
    <div style="font-size:13px;line-height:1.7">
    <p>🎮 <b>经典模式</b>：5 回合，标准起始资源。完整核心规则 + 137 张真实中文卡牌。</p>
    <p>🏢 <b>组织模式</b>：选择一个组织（TTS 角色扩），获得<b>非对称起始资源 + 专属被动 + 每回合主动能力</b>。</p></div>
@@ -3514,6 +3521,20 @@ function planetGfx(body,x,y,r){
   post+=`<circle cx="${x}" cy="${y}" r="${r}" fill="url(#term)" pointer-events="none"/><circle cx="${x}" cy="${y}" r="${r}" fill="url(#specHi)" pointer-events="none"/>`;
   return pre+s+post;
 }
+// 行星卫星：按官方棋盘的「集群语法」——在行星【背向太阳】一侧扇形排布小卫星（名称仅悬停 tooltip，避免 15px 尺度拥挤）
+function planetMoons(body,x,y,r){
+  const P=PLANETS[body]; if(!P||!P.moons||!P.moons.length) return '';
+  const dx=x-CX, dy=y-CY, d=Math.hypot(dx,dy)||1, ux=dx/d, uy=dy/d;   // 外侧（背向太阳中心）单位向量
+  const baseR=(body==='saturn')?r*2.05:r+5.5;                          // 土星卫星放在光环之外
+  const n=P.moons.length; let s='';
+  for(let i=0;i<n;i++){
+    const t=(n===1)?0:(i/(n-1)-0.5), a=t*0.95, ca=Math.cos(a), sa=Math.sin(a);
+    const ox=ux*ca-uy*sa, oy=ux*sa+uy*ca;
+    const mx=(x+ox*baseR).toFixed(1), my=(y+oy*baseR).toFixed(1);
+    s+=`<g><title>${P.name} · 卫星 ${P.moons[i]}</title><circle cx="${mx}" cy="${my}" r="2" fill="#d3dcec" stroke="#586a8c" stroke-width="0.5" opacity=".92"/></g>`;
+  }
+  return s;
+}
 function renderMap(){
   if(SIM)return '';
   const you=G.players[0];
@@ -3589,6 +3610,7 @@ function renderMap(){
       if(isReach) svg+=`<circle class="hl" cx="${x}" cy="${y}" r="${rad+6}" fill="rgba(120,180,255,.12)" stroke="#fff" stroke-width="2" stroke-dasharray="3 3" opacity=".9"/>`;
       if(isPlanet(body)){
         svg+=planetGfx(body,x,y,15);
+        svg+=planetMoons(body,x,y,15);
         svg+=`<text x="${x}" y="${y+27}" class="small-label" fill="#cfe2ff">${PLANETS[body].name}</text>`;
         // 占位指示：轨道器(空心环) / 着陆器(实心方)
         const oc=G.occupants[body];
@@ -3746,7 +3768,8 @@ function renderRes(elId,p){
   let html='';
   for(const k of ['cred','energy','pub','data','vp','card']){
     const ch=(prev[k]!==undefined && prev[k]!==raw[k])?' changed':'';
-    html+=`<span class="res${ch}" title="${names[k]}">${ICON[k]||''}${disp[k]}</span>`;
+    const emph=(k==='vp')?' res-score':'';   // 分数=胜负指标，重点强调（借鉴官方 ResourceBar 的 score 强调）
+    html+=`<span class="res${ch}${emph}" title="${names[k]}">${ICON[k]||''}${disp[k]}</span>`;
   }
   if(p.signalTokens>0){ // 信号令牌（仅在持有时显示，避免经典模式杂乱）
     raw.sig=p.signalTokens;
