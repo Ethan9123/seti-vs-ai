@@ -107,10 +107,19 @@
   .tech{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:60px;height:46px;border-radius:9px;border:1px solid var(--line);font-size:10px;text-align:center;cursor:pointer;padding:2px;transition:.12s;line-height:1.15}
   .tech:hover{border-color:#fff;transform:translateY(-1px)}
   .tech.owned{opacity:.42;cursor:default} .tech.owned.byai{border-color:var(--ai);opacity:.6}
+  .tech.mine{position:relative;opacity:1;border-color:var(--probe);box-shadow:0 0 0 1.5px var(--probe),0 0 9px rgba(70,224,138,.32)}
+  .techchk{position:absolute;top:1px;right:3px;color:var(--probe);font-weight:900;font-size:10px;text-shadow:0 1px 2px #000}
   .tp{background:linear-gradient(180deg,#5a3216,#341a0c)}.tt{background:linear-gradient(180deg,#52184e,#2a0f2a)}.tc{background:linear-gradient(180deg,#16365c,#0f1f33)}
   /* computer */
-  .comp{display:flex;gap:4px;flex-wrap:wrap}
-  .cslot{width:31px;height:31px;border-radius:7px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:9px;position:relative;background:rgba(30,55,105,.25)}
+  /* personal board glass-instrument well: faint terrain backdrop + glass slots (hybrid, borrowed from the official 个人面板) */
+  .comp,#youTech{padding:9px 8px;border-radius:10px;position:relative;overflow:hidden;
+    background:linear-gradient(180deg,rgba(16,34,60,.64),rgba(8,18,38,.74)), #070d1c url('assets/scenes/footer.webp') center/cover;
+    border:1px solid #2a4f86;box-shadow:inset 0 1px 0 rgba(140,185,255,.14),inset 0 -12px 26px rgba(0,0,0,.45)}
+  .comp{display:flex;gap:5px;flex-wrap:wrap}
+  .cslot{width:31px;height:31px;border-radius:7px;border:1px solid rgba(120,170,255,.4);display:flex;align-items:center;justify-content:center;font-size:9px;position:relative;color:#cfe2ff;
+    background:linear-gradient(180deg,rgba(70,120,195,.26),rgba(20,45,85,.34));box-shadow:inset 0 1px 0 rgba(180,210,255,.3),inset 0 -2px 5px rgba(0,0,0,.35)}
+  .cslot .cs-ic{display:inline-flex;align-items:center;justify-content:center}.cslot .cs-ic svg{width:18px;height:18px;display:block}
+  .cslot .cs-v{position:absolute;bottom:0;right:2px;font-size:8px;font-weight:900;color:#fff;text-shadow:0 1px 2px #000;font-family:var(--f-display)}.cslot .cs-fill{font-size:13px;color:#04121f}
   .cslot.filled{background:radial-gradient(circle at 40% 35%,#7fd0ff,#2a8fd6);color:#04121f;font-weight:800;box-shadow:0 0 10px rgba(80,180,255,.6)}
   .cslot.lower{opacity:.9;border-style:dashed}
   /* data-pool meter gauge (borrowed from the official DataPoolView) */
@@ -119,6 +128,23 @@
   .meterbar{height:5px;background:#0a1426;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-top:3px;box-shadow:inset 0 1px 2px rgba(0,0,0,.45)}
   .meterfill{height:100%;background:linear-gradient(90deg,var(--sig-blue),var(--data));transition:width .35s cubic-bezier(.2,.8,.2,1)}
   .datameter.full .meterfill{background:linear-gradient(90deg,var(--sig-green),var(--good))}
+  /* illustrated planetary board (hybrid: official nebula bg + procedural planets/moons/reward-chips) */
+  .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:9px}
+  .pcard{background:rgba(8,16,34,.5);border:1px solid #34557f;border-radius:11px;padding:7px 5px 8px;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.4),inset 0 1px 0 rgba(140,185,255,.1)}
+  .pcard-name{font-weight:800;font-size:11.5px;margin-top:1px;font-family:var(--f-display)}
+  .pcard .rchip{display:inline-block;font-size:10px;background:rgba(10,22,46,.72);border:1px solid #2a4f86;border-radius:7px;padding:2px 6px;margin-top:3px;line-height:1.4}
+  .pcard-moons{font-size:9px;color:#9fb0cf;margin-top:4px;letter-spacing:.02em}
+  .pcard-occ{font-size:9px;margin-top:3px}
+  /* tech research cards (borrowed from the official tech board — orange探测器/紫望远镜/蓝电脑) */
+  .techgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:9px}
+  .techcard{padding:0;border:1px solid var(--tc);border-radius:11px;overflow:hidden;background:rgba(8,16,34,.62);cursor:pointer;text-align:left;color:var(--ink);transition:.13s;font-family:inherit}
+  .techcard:hover{transform:translateY(-2px);box-shadow:0 7px 20px rgba(0,0,0,.5),0 0 0 1px var(--tc)}
+  .techcard-head{display:flex;justify-content:space-between;align-items:center;padding:4px 8px;font-size:10px;font-weight:800;color:#0a0f1c;font-family:var(--f-display);letter-spacing:.05em}
+  .techcard-cost{background:rgba(0,0,0,.28);color:#fff;border-radius:5px;padding:1px 5px;font-size:9px}
+  .techcard-body{padding:7px 9px 9px}
+  .techcard-name{font-weight:800;font-size:12.5px;color:var(--tc)}
+  .techcard-rew{font-size:11px;margin:3px 0;min-height:13px}
+  .techcard-desc{font-size:10px;color:var(--muted);line-height:1.4}
   /* log */
   #log{height:220px;overflow:auto;font-size:12px;line-height:1.5}
   #log div{padding:2px 0;border-bottom:1px dashed rgba(60,90,150,.25)}
@@ -1202,7 +1228,8 @@ function startScreen(){
    <button class="opt" style="margin:0;border:1px solid #3fd0c0" onclick="spectateSetupScreen()">🎙️ AI 解说观战（看 AI 像人一样对决·边看边学）</button>
    <button class="opt" style="margin:0" onclick="startTutorial()">📖 界面速览（快速看一遍界面）</button>
    <button class="opt" style="margin:0" onclick="showCardDex()">🗂 卡牌图鉴（浏览全部 200 张卡牌，开局前先看看）</button></div>
-   ${statsSummaryHTML()}`;
+   ${statsSummaryHTML()}
+   <div style="height:48px;margin:14px -22px -20px;border-radius:0 0 14px 14px;overflow:hidden;background:#0a1428 url('assets/scenes/footer.webp') center bottom/cover;opacity:.95"></div>`;
   $('modalbg').style.display='flex';
 }
 function orgPickScreen(){
@@ -2033,12 +2060,21 @@ function actResearchPrompt(){
   if(p.publicity<researchCost(p)){toast('研究科技需要 '+researchCost(p)+' 公关。');return;}
   const avail=availTechs(p);
   if(avail.length===0){toast('没有可研究的新科技。');return;}
-  modalChoose('研究科技（花 '+researchCost(p)+' 公关，并旋转太阳系）', avail.map(t=>({label:'['+TECHTYPENAME[t.type]+'] '+t.name+'：'+t.desc,v:t.id})), v=>{
-    p.publicity-=researchCost(p);
-    rotateSolarSystem();
-    takeTech(p,v);
-    endMain();
-  }, {cancelLabel:'返回（不研究）'});
+  const COL={probe:'#f08a3c',tele:'#b98cf2',comp:'#4fa8ff'}, cost=researchCost(p);
+  const card=t=>{ const c=COL[t.type]||'#4fa8ff';
+    return `<button class="techcard" style="--tc:${c}" onclick="_doResearchPick('${t.id}')">
+      <div class="techcard-head" style="background:${c}"><span>${TECHTYPENAME[t.type]}</span><span class="techcard-cost">${cost}公关</span></div>
+      <div class="techcard-body"><div class="techcard-name">${t.name}</div><div class="techcard-rew">${fxText(t.imm)||'<span class="muted">永久能力</span>'}</div><div class="techcard-desc">${t.desc||''}</div></div>
+    </button>`; };
+  $('modal').innerHTML=`${modalHero('room.webp','研究科技','Tech · '+cost+'公关 + 旋转太阳系')}
+   <div class="small muted" style="margin-bottom:8px">选 1 项永久科技（<span style="color:#f08a3c">探测器</span> / <span style="color:#b98cf2">望远镜</span> / <span style="color:#4fa8ff">电脑</span> 三类）。研究后太阳系旋转一格。</div>
+   <div class="techgrid">${avail.map(card).join('')}</div>
+   <div style="margin-top:10px"><button class="opt" onclick="closeModal()">返回（不研究）</button></div>`;
+  $('modalbg').style.display='flex';
+}
+function _doResearchPick(id){
+  const p=G.players[0]; if(p.publicity<researchCost(p)){toast('公关不足。');return;} closeModal();
+  p.publicity-=researchCost(p); rotateSolarSystem(); takeTech(p,id); endMain();
 }
 function availTechs(p){
   const res=[];
@@ -3815,9 +3851,12 @@ function renderComputer(){
   const topSlots=p.computer.filter(s=>!s.lower);
   const topFilled=topSlots.filter(s=>s.filled).length, topTotal=topSlots.length, full=topTotal>0&&topFilled>=topTotal;
   let h=`<div class="datameter${full?' full':''}" title="电脑顶行填满 ${topTotal} 格即可执行【分析数据】，获得蓝痕迹并清空">顶行数据 ${topFilled}/${topTotal}${full?' · 可分析 ✓':''}<div class="meterbar"><div class="meterfill" style="width:${topTotal?Math.round(topFilled/topTotal*100):0}%"></div></div></div>`;
+  const slotIc=fx=>fx.vp?ICON.vp:fx.publicity?ICON.pub:fx.credits?ICON.cred:fx.energy?ICON.energy:fx.card?ICON.card:fx.data?ICON.data:fx.tuck?ICON.card:'';
   p.computer.forEach((s,i)=>{
-    let lbl=s.filled?'■':(s.fx.vp?'2分':s.fx.tuck?'收入':s.fx.publicity?'公关':s.fx.credits?'信':s.fx.energy?'能':s.fx.card?'牌':s.fx.data?'据':'·');
-    h+=`<div class="cslot ${s.filled?'filled':''} ${s.lower?'lower':''}" title="${s.lower?'下层(需上层已填)':'顶层'} ${fxText(s.fx)}">${lbl}</div>`;
+    let inner;
+    if(s.filled) inner='<b class="cs-fill">■</b>';
+    else { const ic=slotIc(s.fx), v=s.fx.vp||0; inner= ic?`<span class="cs-ic">${ic}</span>${v>1?'<span class="cs-v">'+v+'</span>':''}`:'·'; }
+    h+=`<div class="cslot ${s.filled?'filled':''} ${s.lower?'lower':''}" title="${s.lower?'下层(需上层已填)':'顶层'} ${fxText(s.fx)}">${inner}</div>`;
   });
   $('youComp').innerHTML=h;
 }
@@ -3877,6 +3916,13 @@ function renderMissions(){
     h+=`<div class="sector" style="padding:5px 8px;margin-bottom:5px"><b>${c.name}</b> <span class="muted" style="font-size:11px">（条件任务：${c.mission.desc}）</span></div>`;
   }
   $('youMissions').innerHTML=h;
+}
+// reusable modal hero banner using the official low-poly scene art (borrowed from the online build)
+function modalHero(img,title,sub){
+  return `<div style="position:relative;height:94px;margin:-20px -22px 13px;border-radius:14px 14px 0 0;overflow:hidden;background:#0a1428 url('assets/scenes/${img}') center 42%/cover">
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,22,.12) 28%,rgba(6,10,22,.9))"></div>
+    <div style="position:absolute;left:18px;bottom:8px"><div class="brand" style="font-size:19px;letter-spacing:2px;text-shadow:0 2px 12px #000">${title}</div>${sub?`<div class="small" style="color:#dbe6ff;letter-spacing:.1em;text-shadow:0 1px 5px #000">${sub}</div>`:''}</div>
+  </div>`;
 }
 function showCheatSheet(){
   $('modal').innerHTML=`<h2>📋 速查 · 每回合你能做什么</h2>
@@ -3990,7 +4036,7 @@ function _dexSet(k,v){_dex[k]=v; _renderDexShell();}
 function _renderDexShell(){
   const btn=(k,v,lbl)=>`<button class="small ${_dex[k]===v?'gold':''}" onclick="_dexSet('${k}','${v}')">${_dex[k]===v?'✓':''}${lbl}</button>`;
   const nB=(window.REALCARDS||[]).length, nS=(window.SA_CARDS||[]).length, nQ=(window.QUICKSTART_CARDS||[]).length;
-  $('modal').innerHTML=`<h2>🗂 卡牌图鉴 · Card Explorer</h2>
+  $('modal').innerHTML=`${modalHero('room.webp','卡牌图鉴','Card Explorer')}
    <div class="small muted" style="margin-bottom:8px">浏览全部 ${nB+nS+nQ} 张卡牌（基础 ${nB} + 扩展 SA ${nS} + 快速开始 ${nQ}），按来源 / 扇区色 / 自由行动 / 名称筛选。含每张卡的 📜 历史背景趣闻（搜索也覆盖背景文字）。对应官网 <b>seti.ender-wiggin.com</b> 的 Card Explorer。</div>
    <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="small muted" style="width:42px">来源</span>${btn('src','all','全部')}${btn('src','base','基础')}${btn('src','sa','扩展SA')}${btn('src','qs','快速开始')}</div>
@@ -4012,7 +4058,7 @@ function renderTech(){
       const mine=p.techs[type].includes(t.id);
       const ai=G.players.some((q,k)=>k>0 && q.techs[type].includes(t.id));
       const cls= type==='probe'?'tp':type==='tele'?'tt':'tc';
-      h+=`<div class="tech ${cls} ${t.taken?'owned':''} ${ai?'byai':''}" title="${t.name}：${t.desc||fxText(t.imm)} ${t.taken?(mine?'(你已拥有)':ai?'(对手已拥有)':'(已取)'):''}" onclick="techInfo('${t.id}')">${t.name}</div>`;
+      h+=`<div class="tech ${cls} ${(t.taken&&!mine)?'owned':''} ${(ai&&!mine)?'byai':''} ${mine?'mine':''}" title="${t.name}：${t.desc||fxText(t.imm)} ${t.taken?(mine?'(你已拥有)':ai?'(对手已拥有)':'(已取)'):''}" onclick="techInfo('${t.id}')">${mine?'<span class="techchk">✓</span>':''}${t.name}</div>`;
     }
   }
   $('youTech').innerHTML=h;
@@ -4487,7 +4533,7 @@ function showFinal(){
      <div style="flex:1;background:rgba(8,18,40,.65);border-radius:7px;overflow:hidden;height:24px;border:1px solid var(--line);position:relative">
        <div style="width:${w.toFixed(0)}%;height:100%;background:linear-gradient(90deg,${pcolor(p.idx)}99,${pcolor(p.idx)});box-shadow:0 0 14px ${pcolor(p.idx)}99;border-radius:7px;transform-origin:left;animation:barGrow 1.1s cubic-bezier(.2,.8,.2,1) forwards"></div></div>
      <span style="width:46px;text-align:right;font-size:22px;font-weight:900;color:${win?'var(--gold)':'var(--muted)'};text-shadow:${win?'0 0 14px rgba(245,205,106,.6)':'none'}">${p.vp}</span></div>`;};
-  m.innerHTML=`<h2>游戏结束 · 最终结算</h2>
+  m.innerHTML=`${modalHero('dialog-results.webp','游戏结束','最终结算 · MISSION COMPLETE')}
    <div style="text-align:center;animation:popIn .55s ease;margin:6px 0 10px">
      <div style="font-size:25px;font-weight:900;letter-spacing:1px;color:${winners.length>1?'var(--gold)':(youWin?'var(--good)':'var(--bad)')};text-shadow:0 0 22px ${youWin?'rgba(84,209,138,.55)':(winners.length>1?'rgba(245,205,106,.5)':'rgba(255,120,120,.45)')}">${title}</div>
      <div class="muted" style="font-size:12px;margin-top:3px">分差 ${Math.abs(ps[0].vp-(ps[1]?ps[1].vp:0))} 分</div>
@@ -4551,16 +4597,39 @@ function showPlanetInfo(b){
    <div style="margin-top:12px"><button class="opt primary" onclick="closeModal()">关闭</button></div>`;
   $('modalbg').style.display='flex';
 }
+// planet gradient defs (so planetGfx's url(#pg_*) resolve inside the modal even before the board renders)
+function planetDefs(){
+  let d='<defs><radialGradient id="term" cx="37%" cy="30%"><stop offset="50%" stop-color="rgba(0,0,0,0)"/><stop offset="100%" stop-color="rgba(0,0,14,.52)"/></radialGradient>'
+    +'<radialGradient id="specHi" cx="36%" cy="28%"><stop offset="0%" stop-color="rgba(255,255,255,.5)"/><stop offset="22%" stop-color="rgba(255,255,255,.08)"/><stop offset="50%" stop-color="rgba(255,255,255,0)"/></radialGradient>';
+  for(const b in PLANET_GRAD){ d+=`<radialGradient id="pg_${b}" cx="38%" cy="32%"><stop offset="0%" stop-color="${PLANET_GRAD[b][0]}"/><stop offset="100%" stop-color="${PLANET_GRAD[b][1]}"/></radialGradient>`; }
+  return d+'</defs>';
+}
+// moons for the planetary-board cards: fan upper-right of the planet (self-contained, not sun-relative)
+function pbMoons(b,cx,cy,r){
+  const moons=(PLANETS[b]&&PLANETS[b].moons)||[]; if(!moons.length)return '';
+  const baseR=(b==='saturn')?r*2.0:r+6; let s='';
+  for(let i=0;i<moons.length;i++){ const t=moons.length>1?i/(moons.length-1):0.5; const a=(-62+t*62)*Math.PI/180;
+    s+=`<circle cx="${(cx+Math.cos(a)*baseR).toFixed(1)}" cy="${(cy+Math.sin(a)*baseR).toFixed(1)}" r="2.6" fill="#d3dcec" stroke="#586a8c" stroke-width="0.6"/>`; }
+  return s;
+}
 function showPlanetaryBoard(){
-  let rows=Object.keys(PLANETS).map(b=>{const pl=PLANETS[b];
-    return `<tr><td style="color:${planetColor(b)};font-weight:800;text-align:left">🪐 ${pl.name}</td>
-      <td style="text-align:left">${rwd(pl.orbit)}</td><td style="text-align:left">${rwd(pl.land)}</td>
-      <td class="small muted">${pl.moons.length?pl.moons.join('、'):'—'}</td>
-      <td class="small">${occText(b)}</td></tr>`;}).join('');
-  $('modal').innerHTML=`<h2>🪐 行星板一览（轨道/着陆奖励）</h2>
-   <div class="small muted" style="margin-bottom:6px">飞到行星格 → 【环绕】或【着陆】得对应奖励；首个环绕/着陆有额外奖励。点棋盘上的行星也可单独查看。</div>
-   <table class="score" style="font-size:12.5px"><tr><th>行星</th><th>🛰环绕</th><th>🪂着陆</th><th>🌙卫星</th><th>占位</th></tr>${rows}</table>
-   <div style="margin-top:12px"><button class="opt primary" onclick="closeModal()">关闭</button></div>`;
+  const order=['mercury','venus','mars','jupiter','saturn','uranus','neptune'];
+  const card=b=>{ const pl=PLANETS[b]; const col=planetColor(b); const fo=G.firstOrbited[b]!==undefined; const occ=occText(b);
+    return `<div class="pcard">
+      <svg viewBox="0 0 112 86" style="width:100%;max-width:122px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">${planetGfx(b,56,44,28)}${pbMoons(b,56,44,28)}</svg>
+      <div class="pcard-name" style="color:${col}">${pl.name} <span class="muted" style="font-size:9px">${pl.en}</span></div>
+      <div><span class="rchip">🛰 ${rwd(pl.orbit)}${fo?'':' <span style="color:var(--gold)">首+3</span>'}</span></div>
+      <div><span class="rchip">🪂 ${rwd(pl.land)}</span></div>
+      ${pl.moons&&pl.moons.length?`<div class="pcard-moons">🌙 ${pl.moons.join(' · ')}</div>`:''}
+      ${occ.indexOf('尚无')<0?`<div class="pcard-occ">${occ}</div>`:''}
+    </div>`; };
+  $('modal').innerHTML=`${modalHero('dialog-settings.webp','行星板','Planetary Board · 轨道 / 着陆 / 卫星')}
+   <svg width="0" height="0" style="position:absolute" aria-hidden="true">${planetDefs()}</svg>
+   <div style="background:#070d1c url('assets/scenes/board-bg.jpg') center/cover;border-radius:12px;padding:11px;border:1px solid #223a63">
+     <div class="pgrid">${order.map(card).join('')}</div>
+   </div>
+   <div class="small muted" style="margin-top:8px">飞到行星格 →【环绕】或【着陆】得对应奖励；首个环绕额外 +3 分。点棋盘上的行星也可单独查看。</div>
+   <div style="margin-top:10px"><button class="opt primary" onclick="closeModal()">关闭</button></div>`;
   $('modalbg').style.display='flex';
 }
 /* ---------- 交互式新手教程 ---------- */
@@ -4878,7 +4947,7 @@ function showRotationHelp(){
 }
 function showHelp(){
   const m=$('modal');
-  m.innerHTML=`<h2>SETI 玩法说明（本数字版）</h2>
+  m.innerHTML=`${modalHero('dialog-settings.webp','玩法说明','SETI · 搜寻地外文明')}
   <div style="font-size:13px;line-height:1.6">
   <p><b>目标</b>：5 回合后分数更高者获胜。通过发射探测器探索太阳系、扫描天空、分析数据，寻找外星生命的痕迹。</p>
   <p><b>每回合每人只做 1 个主行动</b>，外加任意自由行动；轮流进行，直到双方都「跳过」，回合结束。</p>
