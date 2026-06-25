@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SETI · 搜寻地外文明 — 单人对战 AI</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
   :root{
     --bg:#05080f; --panel:rgba(13,24,46,.93); --panel2:rgba(9,18,38,.95); --line:#2b4a7a;
     --line2:#3f6bb0; --ink:#e6eeff; --muted:#93a8d4; --gold:#f5cd6a; --goldsoft:#d9a94a;
@@ -12,26 +13,39 @@
     --cred:#f2c542; --energy:#54d18a; --pub:#ff79c6; --data:#52b9ff; --vp:#b794ff; --move:#7fe6c8;
     --y:#f2c14e; --r:#ef5b6b; --b:#4fa8ff; --k:#9aa6c9;
     --probe:#46e08a; --ai:#ff8a4f;
+    /* ── instrumentation pass: borrowed from the official online build (game.ender-wiggin.com) ── */
+    --f-display:'Orbitron','Noto Sans SC','Microsoft YaHei',sans-serif;  /* titles + numerals */
+    --f-body:'Noto Sans SC','Microsoft YaHei','Segoe UI',system-ui,sans-serif;  /* body/UI */
+    --f-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,monospace;  /* dense data only */
+    /* signal palette — meaning-bound accents (OKLCH) */
+    --sig-blue:oklch(.68 .11 240); --sig-violet:oklch(.62 .14 305); --sig-green:oklch(.78 .13 155);
+    --sig-amber:oklch(.78 .13 75); --sig-red:oklch(.65 .18 25); --sig-violet-hi:oklch(.74 .13 305);
+    --surf-instrument:oklch(.13 .025 258);  /* recessed readout well */
   }
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0;color:var(--ink);font-family:"Microsoft YaHei","Segoe UI",system-ui,sans-serif;font-size:14px}
+  html,body{margin:0;padding:0;color:var(--ink);font-family:var(--f-body);font-size:14px}
   body{
     background:
-      radial-gradient(1400px 700px at 72% -8%, rgba(43,86,160,.35) 0%, transparent 55%),
-      radial-gradient(900px 600px at 12% 110%, rgba(180,110,40,.16) 0%, transparent 50%),
+      /* static starfield (cached data-URI, no twinkle) — cosmic-atmosphere top layer */
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cg fill='%23cfe0ff'%3E%3Ccircle cx='37' cy='52' r='.7'/%3E%3Ccircle cx='118' cy='29' r='.5'/%3E%3Ccircle cx='201' cy='73' r='.9' fill='%23bcd0ff'/%3E%3Ccircle cx='264' cy='41' r='.5'/%3E%3Ccircle cx='342' cy='66' r='.7'/%3E%3Ccircle cx='389' cy='128' r='.6'/%3E%3Ccircle cx='71' cy='141' r='.8' fill='%23fff'/%3E%3Ccircle cx='156' cy='168' r='.5'/%3E%3Ccircle cx='233' cy='133' r='.6'/%3E%3Ccircle cx='311' cy='189' r='.9' fill='%23bcd0ff'/%3E%3Ccircle cx='24' cy='214' r='.6'/%3E%3Ccircle cx='97' cy='248' r='.5'/%3E%3Ccircle cx='178' cy='231' r='.7'/%3E%3Ccircle cx='258' cy='271' r='.5'/%3E%3Ccircle cx='349' cy='243' r='.8' fill='%23fff'/%3E%3Ccircle cx='44' cy='312' r='.6'/%3E%3Ccircle cx='132' cy='344' r='.7'/%3E%3Ccircle cx='209' cy='318' r='.5'/%3E%3Ccircle cx='287' cy='356' r='.6'/%3E%3Ccircle cx='371' cy='331' r='.7' fill='%23bcd0ff'/%3E%3Ccircle cx='15' cy='382' r='.5'/%3E%3Ccircle cx='162' cy='98' r='.6'/%3E%3C/g%3E%3C/svg%3E") repeat,
+      radial-gradient(ellipse 120% 80% at 38% 22%, rgba(58,40,110,.30) 0%, rgba(20,32,70,.18) 45%, transparent 78%),
+      radial-gradient(1400px 700px at 72% -8%, rgba(43,86,160,.32) 0%, transparent 55%),
+      radial-gradient(900px 600px at 12% 110%, rgba(180,110,40,.14) 0%, transparent 50%),
       linear-gradient(180deg, rgba(5,8,16,.82), rgba(5,8,16,.92)),
       url('assets/ui/table.jpg') center/cover fixed, var(--bg);
   }
-  h1,h2,h3{margin:0 0 6px}
+  h1,h2,h3{margin:0 0 6px;font-family:var(--f-display)}
   #app{display:grid;grid-template-columns:304px 1fr 326px;gap:11px;padding:11px;min-height:100vh;align-items:start}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:10px 13px;margin-bottom:11px;
-    box-shadow:0 8px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(120,170,255,.07)}
-  .panel h3{font-size:12.5px;letter-spacing:1.2px;color:var(--gold);text-transform:uppercase;
+  .panel{background:var(--panel);border:1px solid #34557f;border-radius:13px;padding:10px 13px;margin-bottom:11px;
+    box-shadow:0 8px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(140,185,255,.14), inset 0 -1px 0 rgba(0,0,0,.34)}  /* metal hairline (rounded-corner recipe) */
+  .panel h3{font-size:12.5px;letter-spacing:1.2px;color:var(--gold);text-transform:uppercase;font-family:var(--f-display);
     border-bottom:1px solid rgba(120,170,255,.18);padding-bottom:5px;text-shadow:0 0 12px rgba(245,205,106,.35);display:flex;align-items:center;gap:6px}
-  .panel h3::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold)}
+  .panel h3::before{content:"";width:3px;height:12px;border-radius:1px;background:var(--gold);box-shadow:0 0 7px var(--gold)}  /* instrument tick */
   .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-  .res{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(180deg,#0e2148,#0a1730);
-    border:1px solid var(--line);border-radius:20px;padding:3px 10px 3px 7px;font-weight:800;font-size:13px;box-shadow:inset 0 0 10px rgba(60,110,200,.12)}
+  .res{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(180deg,#091428,#0b1a36);
+    border:1px solid var(--line);border-radius:20px;padding:3px 10px 3px 7px;font-weight:800;font-size:13px;
+    box-shadow:inset 0 2px 4px rgba(0,0,0,.42), inset 0 -1px 0 rgba(120,170,255,.10);  /* recessed readout well */
+    font-family:var(--f-display);font-variant-numeric:tabular-nums}
   .res svg{width:16px;height:16px;display:block;flex:none}
   button{font-family:inherit;cursor:pointer;border:1px solid var(--line);color:var(--ink);
     background:linear-gradient(180deg,#16305c,#0e1f3c);border-radius:9px;padding:8px 11px;font-size:13px;font-weight:700;transition:.13s;letter-spacing:.3px}
@@ -45,8 +59,11 @@
   button.act.cantdo{opacity:.4;cursor:help}
   button.act.cantdo:hover:not(:disabled){opacity:.62;border-color:#7a3a32;box-shadow:none;transform:none}
   .turnbar{grid-column:1/-1;text-align:center;font-weight:800;font-size:12.5px;border-radius:8px;padding:5px 6px;margin-bottom:3px;letter-spacing:.3px}
-  .turnbar.you{background:linear-gradient(90deg,#0d3a2a,#114a33);color:#6fe7b0;border:1px solid #2e6b4d;box-shadow:0 0 14px rgba(70,224,138,.22)}
-  .turnbar.wait{background:#14233f;color:#9fb4d6;border:1px solid #2a4f86}
+  .turnbar.you{background:linear-gradient(90deg,#0d3a2a,#114a33);color:#6fe7b0;border:1px solid #2e6b4d;animation:turnGlow 2.4s ease-in-out infinite}
+  @keyframes turnGlow{0%,100%{box-shadow:0 0 9px rgba(70,224,138,.16)}50%{box-shadow:0 0 19px rgba(70,224,138,.40)}}
+  .turnbar.wait{background:#14233f;color:#9fb4d6;border:1px solid #2a4f86;position:relative;overflow:hidden}
+  .turnbar.wait::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(80,150,230,.16),transparent);transform:translateX(-100%);animation:scanSweep 1.6s ease-in-out infinite}  /* AI-thinking uplink shimmer */
+  @keyframes scanSweep{to{transform:translateX(100%)}}
   .turnbar.passed{background:#2a1f14;color:#d9b48c;border:1px solid #6b4a2e}
   .grid-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
   .muted{color:var(--muted)} .small{font-size:12px}
@@ -80,6 +97,8 @@
   .rcard:hover{border-color:#6fb0ff;transform:translateY(-3px);box-shadow:0 8px 22px rgba(40,110,230,.45)}
   .rcap{display:flex;align-items:center;gap:4px;justify-content:center;padding:3px 0;font-size:12px;font-weight:800;background:linear-gradient(180deg,#0c1d3e,#0a1428)}
   .scol{display:inline-block;width:10px;height:10px;border-radius:2px;margin-left:2px;vertical-align:middle;box-shadow:0 0 5px currentColor}
+  /* double-coded sector color chip (color + 红/蓝/黄/黑 letter) — colorblind-safe, never color-only */
+  .scolL{display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;padding:0 3px;border-radius:3px;font-size:9.5px;font-weight:800;color:#0a0f1c;font-family:var(--f-display);vertical-align:middle;margin-right:2px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.28);line-height:1}
   /* tech */
   .tech{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:60px;height:46px;border-radius:9px;border:1px solid var(--line);font-size:10px;text-align:center;cursor:pointer;padding:2px;transition:.12s;line-height:1.15}
   .tech:hover{border-color:#fff;transform:translateY(-1px)}
@@ -90,10 +109,25 @@
   .cslot{width:31px;height:31px;border-radius:7px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:9px;position:relative;background:rgba(30,55,105,.25)}
   .cslot.filled{background:radial-gradient(circle at 40% 35%,#7fd0ff,#2a8fd6);color:#04121f;font-weight:800;box-shadow:0 0 10px rgba(80,180,255,.6)}
   .cslot.lower{opacity:.9;border-style:dashed}
+  /* data-pool meter gauge (borrowed from the official DataPoolView) */
+  .datameter{flex-basis:100%;width:100%;font-size:10px;color:var(--muted);font-family:var(--f-display);letter-spacing:.04em;font-variant-numeric:tabular-nums;margin-bottom:2px}
+  .datameter.full{color:var(--good)}
+  .meterbar{height:5px;background:#0a1426;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-top:3px;box-shadow:inset 0 1px 2px rgba(0,0,0,.45)}
+  .meterfill{height:100%;background:linear-gradient(90deg,var(--sig-blue),var(--data));transition:width .35s cubic-bezier(.2,.8,.2,1)}
+  .datameter.full .meterfill{background:linear-gradient(90deg,var(--sig-green),var(--good))}
   /* log */
   #log{height:220px;overflow:auto;font-size:12px;line-height:1.5}
   #log div{padding:2px 0;border-bottom:1px dashed rgba(60,90,150,.25)}
   .lg-ai{color:var(--ai)} .lg-you{color:var(--probe)} .lg-sys{color:var(--gold)}
+  /* log as action→consequence tree: actor color (text) + kind left-rail/indent/badge + ordinal */
+  #log .logrow{display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:start;border-left:2px solid transparent;padding:2px 4px 2px 6px}
+  #log .logrow .lseq{font-family:var(--f-display);font-size:9px;font-variant-numeric:tabular-nums;color:#5b6f93;opacity:.8;padding-top:1px}
+  #log .logrow .ltxt{min-width:0;overflow-wrap:anywhere}
+  #log .logrow .lbadge{font-family:var(--f-mono);font-size:8px;letter-spacing:.08em;opacity:.55;align-self:center;color:var(--muted)}
+  #log .logrow[data-k=main]{border-left-color:var(--sig-blue);background:rgba(79,168,255,.06)}
+  #log .logrow[data-k=free]{border-left-color:var(--sig-green);background:rgba(70,224,138,.05)}
+  #log .logrow[data-k=effect]{border-left-color:#2b3f63;padding-left:18px}
+  #log .logrow[data-k=meta]{border-left-color:var(--gold);opacity:.85}
   /* modal */
   #modalbg{position:fixed;inset:0;background:rgba(2,6,16,.8);display:none;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(4px)}
   #modal{background:linear-gradient(180deg,#0e1d3b,#0a1428);border:1px solid var(--gold);border-radius:16px;padding:20px 22px;max-width:720px;max-height:88vh;overflow:auto;box-shadow:0 24px 70px rgba(0,0,0,.7),0 0 40px rgba(245,205,106,.12)}
@@ -110,7 +144,7 @@
   table.score{width:100%;border-collapse:collapse;font-size:12.5px}
   table.score td,table.score th{border:1px solid var(--line);padding:5px 8px;text-align:center}
   table.score th{color:var(--gold)}
-  .brand{font-weight:900;letter-spacing:3px;font-size:20px;
+  .brand{font-weight:900;letter-spacing:3px;font-size:20px;font-family:var(--f-display);
     background:linear-gradient(90deg,#9fd0ff,#f5cd6a 60%,#ff9a6a);-webkit-background-clip:text;background-clip:text;color:transparent;
     text-shadow:0 0 30px rgba(120,180,255,.25)}
   ::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:#23436e;border-radius:6px}::-webkit-scrollbar-track{background:#0a1428}
@@ -124,7 +158,7 @@
   #rowSection{width:430px;flex:none;display:flex;flex-direction:column;border-left:1px solid rgba(120,170,255,.15);padding-left:12px}
   .dockTitle{font-size:12.5px;font-weight:800;letter-spacing:.6px;color:var(--gold);margin-bottom:6px;display:flex;align-items:center;gap:8px}
   /* 资源条：紧贴手牌坞，随时可见 */
-  .dockres{display:flex;flex-wrap:wrap;gap:6px 9px;align-items:center;margin-bottom:7px;padding:6px 8px;background:linear-gradient(180deg,rgba(14,30,58,.8),rgba(10,22,46,.8));border:1px solid var(--line);border-radius:10px}
+  .dockres{display:flex;flex-wrap:wrap;gap:6px 9px;align-items:center;margin-bottom:7px;padding:6px 8px;background:linear-gradient(180deg,rgba(14,30,58,.8),rgba(10,22,46,.8));border:1px solid var(--line);border-radius:10px;font-family:var(--f-display);font-variant-numeric:tabular-nums}
   .dres{display:inline-flex;align-items:center;gap:3px;font-size:13px;color:#cfe0ff;font-weight:700}
   .dres b{font-size:15px;color:#fff}
   .dres svg{width:15px;height:15px}
@@ -177,7 +211,8 @@
   .cardpick{display:flex;gap:11px;align-items:center;padding:8px 9px;width:100%;text-align:left;background:rgba(16,32,60,.55);border:1px solid var(--line2);border-radius:11px;transition:.12s}
   .cardpick:hover{border-color:#6fb0ff;background:rgba(24,52,92,.8);transform:translateX(3px);box-shadow:0 4px 16px rgba(40,110,230,.3)}
   .cppic{width:52px;height:73px;object-fit:cover;border-radius:6px;flex:none;box-shadow:0 3px 10px rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.12)}
-  .cpalien{display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#3a2a5a,#1a1430);font-size:9px;color:#c9b6ff;text-align:center;padding:3px;line-height:1.2}
+  .cpalien{display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#3a2a5a,#1a1430);font-size:9px;color:#c9b6ff;text-align:center;padding:3px;line-height:1.2;
+    box-shadow:inset 0 0 0 1px oklch(.62 .14 305 / .5), 0 0 13px oklch(.62 .14 305 / .22)}  /* nebula-violet = discovery accent */
   .cpinfo{flex:1;min-width:0}
   .cpname{font-weight:800;font-size:13px;color:#e6eeff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .cpmeta{font-size:11px;color:var(--muted);margin:2px 0}
@@ -220,6 +255,18 @@
     button.small{padding:5px 7px;font-size:11.5px}
     #log{height:150px}
     .grid-actions{grid-template-columns:1fr 1fr}
+  }
+  /* ── instrumentation pass: signal-pulse utility + reduced-motion guard ── */
+  .signal-pulse{animation:sigPulse 2.4s ease-in-out infinite}
+  @keyframes sigPulse{0%,100%{opacity:.6}50%{opacity:1}}
+  .mono{font-family:var(--f-mono)}
+  /* Bulletin toast */
+  #toast .toastTs{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.06em;color:var(--muted);margin-bottom:2px;text-transform:uppercase}
+  @keyframes bulletinIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:none}}
+  /* keyboard focus = anodized-blue ring (accessibility) */
+  button:focus-visible,.cardpick:focus-visible,.hcard:focus-visible,.rcard:focus-visible,a:focus-visible,[tabindex]:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--sig-blue);outline-offset:2px}
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
   }
 </style>
 </head>
@@ -1203,9 +1250,9 @@ function youOrgActive(){
 }
 
 /* ---------- 日志 ---------- */
-function logS(t){G.log.unshift({c:'lg-sys',t});if(G._replay)G._replay.push('· '+t);trimLog();}
-function logY(t){G.log.unshift({c:'lg-you',t});if(G._replay)G._replay.push('[你] '+t);trimLog();}
-function logA(t){G.log.unshift({c:'lg-ai',t});if(G._replay)G._replay.push('[AI] '+t);trimLog();}
+function logS(t){G.log.unshift({c:'lg-sys',t});if(G._replay)G._replay.push('· '+t);G._logN=(G._logN||0)+1;trimLog();}
+function logY(t){G.log.unshift({c:'lg-you',t});if(G._replay)G._replay.push('[你] '+t);G._logN=(G._logN||0)+1;trimLog();}
+function logA(t){G.log.unshift({c:'lg-ai',t});if(G._replay)G._replay.push('[AI] '+t);G._logN=(G._logN||0)+1;trimLog();}
 function trimLog(){if(G.log.length>160)G.log.length=160;renderLog();}
 
 /* ===========================================================
@@ -3546,7 +3593,12 @@ function renderMap(){
         // 占位指示：轨道器(空心环) / 着陆器(实心方)
         const oc=G.occupants[body];
         if(oc){ let ox=x-13;
-          const mk=(col,kind,n)=>{ for(let k=0;k<Math.min(n,3);k++){ if(kind==='orb') svg+=`<circle cx="${ox}" cy="${y-19}" r="2.6" fill="none" stroke="${col}" stroke-width="1.6"/>`; else svg+=`<rect x="${ox-2.4}" y="${y-21.4}" width="4.8" height="4.8" fill="${col}"/>`; ox+=6.5; } };
+          // one token + count-badge-only-when>1 (borrowed from the official build) — fixes the old silent cap at 3, with a dark-stroke halo for contrast on any planet
+          const mk=(col,kind,n)=>{ if(n<=0)return;
+            if(kind==='orb') svg+=`<circle cx="${ox}" cy="${y-19}" r="3.9" fill="none" stroke="#04101f" stroke-width="0.7" opacity=".55"/><circle cx="${ox}" cy="${y-19}" r="2.9" fill="none" stroke="${col}" stroke-width="1.8"/>`;
+            else svg+=`<rect x="${ox-2.6}" y="${y-21.6}" width="5.2" height="5.2" rx="1" fill="${col}" stroke="#04101f" stroke-width="0.7"/>`;
+            if(n>1) svg+=`<text x="${ox+4.6}" y="${y-16.2}" font-size="7.5" font-weight="800" font-family="Orbitron,monospace" fill="#fff" stroke="#04101f" stroke-width="1.6" paint-order="stroke">${n}</text>`;
+            ox+= n>1?11:8; };
           for(let pi=0;pi<G.players.length;pi++){ mk(pcolor(pi),'orb',oc.orb[pi]||0); }
           for(let pi=0;pi<G.players.length;pi++){ mk(pcolor(pi),'land',oc.land[pi]||0); }
         }
@@ -3737,7 +3789,9 @@ const ICON={
 
 function renderComputer(){
   const p=G.players[0];
-  let h='';
+  const topSlots=p.computer.filter(s=>!s.lower);
+  const topFilled=topSlots.filter(s=>s.filled).length, topTotal=topSlots.length, full=topTotal>0&&topFilled>=topTotal;
+  let h=`<div class="datameter${full?' full':''}" title="电脑顶行填满 ${topTotal} 格即可执行【分析数据】，获得蓝痕迹并清空">顶行数据 ${topFilled}/${topTotal}${full?' · 可分析 ✓':''}<div class="meterbar"><div class="meterfill" style="width:${topTotal?Math.round(topFilled/topTotal*100):0}%"></div></div></div>`;
   p.computer.forEach((s,i)=>{
     let lbl=s.filled?'■':(s.fx.vp?'2分':s.fx.tuck?'收入':s.fx.publicity?'公关':s.fx.credits?'信':s.fx.energy?'能':s.fx.card?'牌':s.fx.data?'据':'·');
     h+=`<div class="cslot ${s.filled?'filled':''} ${s.lower?'lower':''}" title="${s.lower?'下层(需上层已填)':'顶层'} ${fxText(s.fx)}">${lbl}</div>`;
@@ -3955,7 +4009,7 @@ function renderSectors(){
     });
     const winners=s.wins.map(w=>pname(w)).join('、');
     h+=`<div class="sector" title="扫描标记信号→拿数据；标记最多者赢得扇区，得红色胜利痕迹（首胜+3分+1数据，之后+1分）。第2位标记+2分。"><div class="row" style="justify-content:space-between">
-      <b>${s.name} <span class="scol" style="background:var(--${s.color})"></span></b>
+      <b>${s.name} <span class="scolL" style="background:var(--${s.color})" title="${COLORNAME[s.color]}色">${COLORNAME[s.color]}</span></b>
       <span class="small muted">容量${s.size}${winners?' · 胜:'+winners:''}</span></div>
       <div style="margin-top:4px">${slots}</div>
       <div class="small muted" style="margin-top:2px">胜：<span style="color:var(--r)">红痕迹</span> ${s.firstWon?'<span style="color:var(--vp)">+1分</span>':'<span style="color:var(--gold)">首胜+3分+1数据</span>'} · 第2位+2分</div></div>`;
@@ -4031,7 +4085,7 @@ function renderGold(){
   });
   $('goldTiles').innerHTML=h;
 }
-function colSwatches(cols){ return (cols||[]).map(c=>`<span class="scol" style="background:var(--${c})"></span>`).join(''); }
+function colSwatches(cols){ return (cols||[]).map(c=>`<span class="scolL" style="background:var(--${c})" title="${COLORNAME[c]||c}色扇区">${COLORNAME[c]||c}</span>`).join(''); }
 function cardArt(c,w){
   if(c.n!=null) return `<img src="assets/cards/c${c.n}.jpg" alt="${c.name}" style="width:${w}px;border-radius:7px;display:block" loading="lazy" onerror="this.style.display='none'">`;
   if(c.sa){ const h=Math.round(w*1.38); const cc=c.cols&&c.cols[0]; const colHex={y:'#f2c542',r:'#ff6b5e',b:'#52b9ff',k:'#9b8cff'}[cc]||'#7fd0ff';
@@ -4087,9 +4141,22 @@ function cardClick(i){
     if(TUT_ONLY.indexOf('card:')===0){ if(!c||c.n!==Number(TUT_ONLY.slice(5))){ toast('请按教程提示，点击高亮的那张卡。'); return; } }
     else { toast('请按教程提示操作（先完成当前高亮的行动）。'); return; }
   }
+  // structured, labeled card readout (borrowed from the official TextCard format): 扇区/费用·收入/效果/任务/金框
+  const lbl=s=>`<span style="font-family:var(--f-display);font-size:9px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase">${s}</span>`;
+  const effectText=(c.note||fxText(c.fx)||'—');
+  let missionRow='';
+  if(c.mission){ let done=false; try{ done=conditionMet(p,c.mission.cond); }catch(e){}
+    const mdesc=String(c.mission.desc||'').replace(/^\s*🎯?\s*任务[：:]\s*/,'');
+    missionRow=`<div>${lbl('🎯 任务')} ${done?'<span style="color:var(--good);font-weight:800">✓ 已达成</span>':''}<br><span style="color:#cfe0ff;${done?'opacity:.65':''}">${mdesc}</span></div>`; }
   const detail=`<div style="display:flex;gap:12px"><div>${cardArt(c,220)}</div>
-    <div style="max-width:300px"><b>${c.name}</b><div class="small muted" style="margin:4px 0">${colSwatches(c.cols)} 费 ${c.cost}¢ · 收入:${incName(c.inc)} · 角标:${cornerName(c.corner)}</div>
-    <div style="font-size:13px;line-height:1.5">${c.note||fxText(c.fx)}${c.mission?'<br>🎯任务：'+c.mission.desc:''}${c.endgame?'<br>🏅金框：'+c.endgame.name:''}</div>${flavorHTML(c)}</div></div>`;
+    <div style="max-width:300px"><b style="font-size:15px">${c.name}</b>
+    <div style="display:flex;flex-direction:column;gap:5px;margin-top:7px;font-size:12.5px;line-height:1.45">
+      <div>${lbl('扇区')} ${colSwatches(c.cols)}</div>
+      <div>${lbl('费用 · 收入 · 角标')} ${c.cost}¢ · ${incName(c.inc)} · ${cornerName(c.corner)}</div>
+      <div>${lbl('效果')}<br><span>${effectText}</span></div>
+      ${missionRow}
+      ${c.endgame?`<div>${lbl('🏅 金框计分')}<br>${c.endgame.name}</div>`:''}
+    </div>${flavorHTML(c)}</div></div>`;
   const m=$('modal');
   m.innerHTML=`<h2>卡牌操作</h2>${detail}<div style="margin-top:12px">
     <button class="opt primary" ${p.credits<c.cost?'disabled':''} onclick="_cardAct(${i},'play')">作为主行动打出（费${c.cost}信用）${p.credits<c.cost?' [信用不足]':''}</button>
@@ -4181,9 +4248,9 @@ function renderActions(){
     <button class="act${gl('orbit')}${cando('orbit')}${cantdo('orbit')}" data-act="orbit" ${dz('orbit')}${tt('orbit')} onclick="actOrbit()">🛰 环绕<br><span class="small muted">1信用+1能量</span></button>
     <button class="act${gl('land')}${cando('land')}${cantdo('land')}" data-act="land" ${dz('land')}${tt('land')} onclick="actLand()">🪂 着陆<br><span class="small muted">${landCost(p,landB)}能量</span></button>
     <button class="act${gl('scan')}${cando('scan')}${cantdo('scan')}" data-act="scan" ${dz('scan')}${tt('scan')} onclick="actScan()">📡 扫描<br><span class="small muted">1信用+2能量</span></button>
-    <button class="act${gl('analyze')}${cando('analyze')}${cantdo('analyze')}" data-act="analyze" ${dz('analyze')}${tt('analyze')} onclick="actAnalyze()">💾 分析数据<br><span class="small muted">1能量</span></button>
+    <button class="act${gl('analyze')}${cando('analyze')}${cantdo('analyze')}" data-act="analyze" ${dz('analyze')}${tt('analyze')} onclick="actAnalyze()">💾 分析数据<br><span class="small muted">${analyzeCost(p)===0?'免费':analyzeCost(p)+'能量'}</span></button>
     <button class="act${gl('card')}${cando('card')}${cantdo('card')}" data-act="card" ${dz('card')}${tt('card')} onclick="actPlayCardPrompt()">🃏 打出卡牌</button>
-    <button class="act${gl('research')}${cando('research')}${cantdo('research')}" data-act="research" ${dz('research')}${tt('research')} onclick="actResearchPrompt()">🔬 研究科技<br><span class="small muted">6公关</span></button>
+    <button class="act${gl('research')}${cando('research')}${cantdo('research')}" data-act="research" ${dz('research')}${tt('research')} onclick="actResearchPrompt()">🔬 研究科技<br><span class="small muted">${researchCost(p)}公关</span></button>
     ${(G.pluto&&p.pluto)?`
     <button class="act" data-act="plutoOrbit" ${dis||!canPlutoOrbit(p)?'disabled':''} onclick="actOrbitPluto()" title="冥王星促销：最外环有探测器即可环绕（每人限1次）">🌑 环绕冥王星<br><span class="small muted">1信用+1能量${p.pluto&&p.pluto.orb?' ✓已环绕':''}</span></button>
     <button class="act" data-act="plutoLand" ${dis||!canPlutoLand(p)?'disabled':''} onclick="actLandPluto()" title="冥王星促销：最外环有探测器即可着陆（每人限1次）">🌑 着陆冥王星<br><span class="small muted">${plutoLandCost(p)}能量${p.pluto&&p.pluto.land?' ✓已着陆':''}</span></button>`:''}
@@ -4196,8 +4263,21 @@ function renderActions(){
     <button class="small" data-free="tuck" ${dis||p.hand.length===0?'disabled':''} ${lk('tuck')} onclick="promptTuck(G.players[0],true)">塞收入(自由)</button>
   `;
 }
+// 4-bucket log classifier (borrowed from the official build): actor color (who) + kind left-rail/indent/badge (what) + running ordinal
+function logKindOf(t){
+  if(/^—— 第|新游戏开始|游戏结束|长期目标|里程碑|物种被发现|太阳系旋转|Rival|揭示|危险值结算|快速开始|组织：|对手：/.test(t)) return 'meta';
+  if(/移动探测器|拖拽移动|环绕|着陆|扫描|研究科技|分析数据|购买卡牌|作为主行动|打出|出牌/.test(t)) return 'main';
+  if(/兑换资源|塞入收入卡|弃牌取角标/.test(t)) return 'free';
+  return 'effect';
+}
 function renderLog(){
-  $('log').innerHTML=G.log.slice(0,80).map(e=>`<div class="${e.c}">${e.t}</div>`).join('');
+  if(typeof SIM!=='undefined'&&SIM)return;
+  const tot=G._logN||G.log.length;
+  const BADGE={main:'主',free:'由',effect:'·',meta:'§'};
+  $('log').innerHTML=G.log.slice(0,80).map((e,i)=>{
+    const k=logKindOf(e.t), seq=String(Math.max(1,tot-i)).padStart(3,'0');
+    return `<div class="logrow ${e.c}" data-k="${k}"><span class="lseq">${seq}</span><span class="ltxt">${e.t}</span><span class="lbadge">${BADGE[k]}</span></div>`;
+  }).join('');
 }
 // 真实「先手玩家」令牌（TTS 月亮素材），显示在先手玩家面板标题处
 function firstPlayerBadge(idx){
@@ -4331,9 +4411,19 @@ let _toastT=null;
 function toast(msg){
   if(SIM)return;
   let t=$('toast');
-  if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;left:50%;top:18px;transform:translateX(-50%);background:#1b2b50;border:1px solid var(--gold);color:#fff;padding:9px 16px;border-radius:10px;z-index:99;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.5)';document.body.appendChild(t);}
-  t.textContent=msg; t.style.display='block';
-  clearTimeout(_toastT); _toastT=setTimeout(()=>t.style.display='none',1900);
+  if(!t){
+    t=document.createElement('div');t.id='toast';
+    /* Bulletin component (borrowed from the official online build): top-right, surface-raised, 1px signal-blue edge, mono timestamp, slide-in */
+    t.style.cssText='position:fixed;right:16px;top:62px;max-width:330px;background:oklch(.24 .036 262);border:1px solid #34557f;border-left:2px solid var(--sig-blue);color:#eaf2ff;padding:8px 13px 9px;border-radius:9px;z-index:99;box-shadow:0 12px 30px rgba(0,0,0,.55);font-weight:600;font-size:13px;line-height:1.35';
+    t.innerHTML='<div class="toastTs"></div><div class="toastBody"></div>';
+    document.body.appendChild(t);
+  }
+  const d=new Date(),pad=n=>String(n).padStart(2,'0');
+  t.querySelector('.toastTs').textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds())+' · 通讯';
+  t.querySelector('.toastBody').textContent=msg;
+  t.style.display='block';
+  t.style.animation='none'; void t.offsetWidth; t.style.animation='bulletinIn .28s cubic-bezier(.16,1,.3,1)';
+  clearTimeout(_toastT); _toastT=setTimeout(()=>t.style.display='none',2400);
 }
 
 /* ===========================================================
@@ -4360,6 +4450,13 @@ function showFinal(){
   const anyDanger=ps.some(p=>p.finalDanger);
   const colH=ps.map(p=>`<th style="color:${pcolor(p.idx)}">${pname(p.idx)}</th>`).join('');
   const row=(label,fn)=>`<tr><td>${label}</td>${ps.map(p=>`<td>${fn(p)}</td>`).join('')}</tr>`;
+  // score-breakdown ledger (borrowed from the official build): point-source rows SUM to total, zero cells dimmed, winner column tinted
+  const base=p=>p.vp-(p.finalGold||0)-(p.finalEnd||0)-(p.finalAlien||0)-(p.finalDanger||0);
+  const isWin=p=>p.vp===maxVp;
+  const winBg=p=>isWin(p)?'background:rgba(245,205,106,.08);':'';
+  const pcell=(p,v)=>{const z=(v===0);return `<td style="text-align:right;font-variant-numeric:tabular-nums;${winBg(p)}${z?'opacity:.3':''}">${z?'·':v}</td>`;};
+  const prow=(label,fn)=>`<tr><td style="white-space:nowrap">${label}</td>${ps.map(p=>pcell(p,fn(p))).join('')}</tr>`;
+  const statRow=(label,fn)=>`<tr><td style="opacity:.7">${label}</td>${ps.map(p=>`<td style="text-align:right;opacity:.62;${winBg(p)}">${fn(p)}</td>`).join('')}</tr>`;
   const m=$('modal');
   const mx=Math.max.apply(null,ps.map(p=>p.vp).concat([1]));
   const bar=(p)=>{const w=Math.max(4,p.vp/mx*100);const win=p.vp===maxVp;return `<div style="display:flex;align-items:center;gap:9px;margin:5px 0">
@@ -4373,16 +4470,18 @@ function showFinal(){
      <div class="muted" style="font-size:12px;margin-top:3px">分差 ${Math.abs(ps[0].vp-(ps[1]?ps[1].vp:0))} 分</div>
    </div>
    <div style="margin:8px 0 14px">${ps.map(bar).join('')}</div>
-   <table class="score"><tr><th>项目</th>${colH}</tr>
-     ${row('金板倍率得分',p=>p.finalGold||0)}
-     ${row('金框卡得分',p=>p.finalEnd||0)}
-     ${row('外星道具得分',p=>p.finalAlien||0)}
-     ${anyDanger?row('<span style="color:#ff8a6a">埃克塞尔危险扣分</span>',p=>p.finalDanger||0):''}
-     ${row('科技数',p=>techCount(p))}
-     ${row('扇区胜利/轨道/着陆',p=>p.sectorWins+'/'+p.orbiters+'/'+p.landers)}
-     ${row('生命痕迹(登/胜/析)',p=>p.traces.land+'/'+p.traces.win+'/'+p.traces.analyze)}
-     ${row('完成任务',p=>p.completedMissions)}
-     <tr><th>总分</th>${ps.map(p=>`<th style="font-size:18px;color:var(--gold)">${p.vp}</th>`).join('')}</tr>
+   <table class="score"><tr><th>计分来源</th>${ps.map(p=>`<th style="color:${pcolor(p.idx)};${winBg(p)}">${isWin(p)?'👑 ':''}${pname(p.idx)}</th>`).join('')}</tr>
+     ${prow('对局累计得分',base)}
+     ${prow('金板倍率',p=>p.finalGold||0)}
+     ${prow('金框卡',p=>p.finalEnd||0)}
+     ${prow('外星道具',p=>p.finalAlien||0)}
+     ${anyDanger?prow('<span style="color:#ff8a6a">危险扣分</span>',p=>p.finalDanger||0):''}
+     <tr><th>总分</th>${ps.map(p=>`<th style="font-size:18px;color:var(--gold);${winBg(p)}">${p.vp}</th>`).join('')}</tr>
+     <tr><td colspan="${ps.length+1}" style="text-align:center;font-size:9.5px;letter-spacing:.18em;color:var(--muted);padding-top:8px;opacity:.7">明 细 · 非 计 分 参 考</td></tr>
+     ${statRow('科技数',p=>techCount(p))}
+     ${statRow('扇区胜/轨道/着陆',p=>p.sectorWins+'/'+p.orbiters+'/'+p.landers)}
+     ${statRow('痕迹(登/胜/析)',p=>p.traces.land+'/'+p.traces.win+'/'+p.traces.analyze)}
+     ${statRow('完成任务',p=>p.completedMissions)}
    </table>
    <div style="margin-top:12px;display:flex;gap:8px"><button class="primary opt" style="flex:1" onclick="startScreen()">再来一局</button><button class="opt" onclick="exportReplay()" title="导出本局完整日志">📥 导出复盘</button></div>`;
   if(_storyTut){ TUT_SEEN.add('victory'); _storyTut=false;
