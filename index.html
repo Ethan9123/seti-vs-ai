@@ -465,15 +465,17 @@ function freshRings(){
 /* ---------- 天空扇区 ---------- */
 // 官方 8 个星系（每色各 2 个），环形交替排布。色对印证自快速开始卡 + DLR 促销卡：
 // 红=巴纳德星·比邻星 / 蓝=天狼星A·南河三 / 黄=开普勒22·室女座61 / 黑=织女星·绘架座β
+// 官方权威扇区数值（2026-07-11 提取自官方在线版 sectorSetup 数据块）：
+// size=数据槽容量、firstWin=该扇区首次被赢的奖励、repeatWin=之后每次被赢的奖励（各星不同，非统一公式）
 const SECTOR_DEFS=[
-  {name:'巴纳德星',  en:"Barnard's Star",   color:'r',size:3},
-  {name:'天狼星A',   en:'Sirius A',         color:'b',size:2},
-  {name:'开普勒22',  en:'Kepler 22',        color:'y',size:4},
-  {name:'织女星',    en:'Vega',             color:'k',size:2},
-  {name:'比邻星',    en:'Proxima Centauri', color:'r',size:3},
-  {name:'南河三',    en:'Procyon',          color:'b',size:3},
-  {name:'室女座61',  en:'61 Virginis',      color:'y',size:2},
-  {name:'绘架座β',   en:'Beta Pictoris',    color:'k',size:3},
+  {name:'巴纳德星',  en:"Barnard's Star",   color:'r',size:5, firstWin:{trace:'win'},      repeatWin:{vp:3}},
+  {name:'天狼星A',   en:'Sirius A',         color:'b',size:6, firstWin:{trace:'win'},      repeatWin:{trace:'win'}},
+  {name:'开普勒22',  en:'Kepler 22',        color:'y',size:5, firstWin:{trace:'win'},      repeatWin:{vp:3}},
+  {name:'织女星',    en:'Vega',             color:'k',size:4, firstWin:{trace:'win',vp:2}, repeatWin:{vp:5}},
+  {name:'比邻星',    en:'Proxima Centauri', color:'r',size:6, firstWin:{trace:'win'},      repeatWin:{trace:'win'}},
+  {name:'南河三',    en:'Procyon',          color:'b',size:5, firstWin:{trace:'win'},      repeatWin:{vp:3}},
+  {name:'室女座61',  en:'61 Virginis',      color:'y',size:6, firstWin:{trace:'win'},      repeatWin:{trace:'win'}},
+  {name:'绘架座β',   en:'Beta Pictoris',    color:'k',size:5, firstWin:{trace:'win',vp:3}, repeatWin:{trace:'win'}},
 ];
 const COLORNAME={y:'黄',r:'红',b:'蓝',k:'黑'};
 // 多人局（2-4人）：玩家身份用索引 0..N-1。0=你（人类），1..=AI 对手。
@@ -1171,6 +1173,8 @@ function renderLongTerm(){
 let _selNumP=2, _selExpansion=false, _selHeptapods=false;
 let _selOpps=[{aiMode:(typeof window!=='undefined'&&window.AZ_WEIGHTS)?'alphazero':'neural',rivalDiff:3}];   // 默认最强可用AI
 function aiAvail(){ return !!(window.AI_NN && window.AI_WEIGHTS); }
+let _setOpen=false;                                   // 开始界面「⚙️ 对局设置」折叠状态（渐进披露，改设置后保持展开）
+function toggleSetPanel(){ _setOpen=!_setOpen; startScreen(); }
 function setNumP(n){ _selNumP=n;
   while(_selOpps.length<n-1) _selOpps.push({aiMode:'heuristic',rivalDiff:3});
   _selOpps.length=n-1;
@@ -1200,14 +1204,12 @@ function startScreen(){
      </div>`;
    }).join('');
   const aiSel=pcSel+oppSel;
-  m.innerHTML=`<div style="position:relative;height:120px;margin:-20px -22px 14px;border-radius:14px 14px 0 0;overflow:hidden;background:#0a1428 url('assets/scenes/lobby.webp') center 40%/cover">
-     <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,22,.10) 38%,rgba(6,10,22,.92))"></div>
-     <div style="position:absolute;left:18px;bottom:9px"><div class="brand" style="font-size:24px;letter-spacing:3px;text-shadow:0 2px 14px #000">SETI</div><div class="small" style="color:#dbe6ff;letter-spacing:.14em;text-shadow:0 1px 6px #000">搜寻地外文明 · 单人对战 AI</div></div>
-   </div>
-   <div style="font-size:13px;line-height:1.7">
-   <p>🎮 <b>经典模式</b>：5 回合，标准起始资源。完整核心规则 + 137 张真实中文卡牌。</p>
-   <p>🏢 <b>组织模式</b>：选择一个组织（TTS 角色扩），获得<b>非对称起始资源 + 专属被动 + 每回合主动能力</b>。</p></div>
-   ${aiSel}
+  // —— 人类直觉层级：①继续对局（最相关）②大号主CTA ③新手引导 ④折叠的设置（带实时摘要）⑤次要功能一行收纳 ——
+  const st=loadStats(); const firstRun=!st||!st.games;                      // 无完成对局 = 新手
+  const oppSummary=(()=>{ const L={alphazero:'🏆AlphaZero',neural:'🧠全局AI',heuristic:'⚙️启发式',rival:'🤖Rival'};
+    const names=_selOpps.slice(0,_selNumP-1).map(o=>L[o.aiMode]||o.aiMode); return [...new Set(names)].join('+'); })();
+  const setSummary=`${_selNumP} 人 · ${oppSummary} · ${_selExpansion?'含扩展':'仅基础'}${_selHeptapods?' · +七肢桶':''}`;
+  const setBody=`${aiSel}
    <div style="margin:12px 0 4px;color:var(--gold);font-weight:800;letter-spacing:.5px">🛰 扩展内容（Space Agencies）</div>
    <div style="display:flex;gap:7px">
     <button class="opt ${!_selExpansion?'gold':''}" style="flex:1" onclick="setExpansion(false)">${!_selExpansion?'✓ ':''}仅基础（137卡）</button>
@@ -1219,15 +1221,34 @@ function startScreen(){
     <button class="opt ${!_selHeptapods?'gold':''}" style="flex:1" onclick="setHeptapods(false)">${!_selHeptapods?'✓ ':''}标准 8 物种</button>
     <button class="opt ${_selHeptapods?'gold':''}" style="flex:1" onclick="setHeptapods(true)">${_selHeptapods?'✓ ':''}加入七肢桶（《降临》第9物种）</button>
    </div>
-   <div class="small muted" style="margin-top:4px">勾选后，每局必有"七肢桶"登场（粉丝设计 by Tahsin Shamma，合作板几何已为单机抽象；其余 1 个物种随机）。</div>
-   <div style="margin-top:14px;display:flex;flex-direction:column;gap:7px">
+   <div class="small muted" style="margin-top:4px">勾选后，每局必有"七肢桶"登场（粉丝设计 by Tahsin Shamma，合作板几何已为单机抽象；其余 1 个物种随机）。</div>`;
+  m.innerHTML=`<div style="position:relative;height:120px;margin:-20px -22px 14px;border-radius:14px 14px 0 0;overflow:hidden;background:#0a1428 url('assets/scenes/lobby.webp') center 40%/cover">
+     <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(6,10,22,.10) 38%,rgba(6,10,22,.92))"></div>
+     <div style="position:absolute;left:18px;bottom:9px"><div class="brand" style="font-size:24px;letter-spacing:3px;text-shadow:0 2px 14px #000">SETI</div><div class="small" style="color:#dbe6ff;letter-spacing:.14em;text-shadow:0 1px 6px #000">搜寻地外文明 · 单人对战 AI</div></div>
+   </div>
+   <div style="display:flex;flex-direction:column;gap:7px">
    ${(()=>{ const sv=loadSave(); return sv&&sv.meta?`<button class="opt gold" style="margin:0;border:1px solid var(--gold)" onclick="resumeGame()">▶ 继续上次对局（${sv.meta.mode==='org'?'组织':'经典'}模式 · ${sv.meta.np} 人 · 第 ${sv.meta.round}/${sv.meta.maxRound} 回合）</button>`:''; })()}
-   <button class="opt primary" style="margin:0" onclick="newGame(classicOpts())">🎮 经典模式（${_selNumP} 人 · 5 回合）${_selExpansion?'· 含扩展':''}</button>
-   <button class="opt gold" style="margin:0" onclick="orgPickScreen()">🏢 组织模式（2 人 · 选择组织）</button>
-   <button class="opt gold" style="margin:0" onclick="startStoryTutorial()">🎬 剧情教程（手把手通关一局，零基础必玩）</button>
-   <button class="opt" style="margin:0;border:1px solid #3fd0c0" onclick="spectateSetupScreen()">🎙️ AI 解说观战（看 AI 像人一样对决·边看边学）</button>
-   <button class="opt" style="margin:0" onclick="startTutorial()">📖 界面速览（快速看一遍界面）</button>
-   <button class="opt" style="margin:0" onclick="showCardDex()">🗂 卡牌图鉴（浏览全部 200 张卡牌，开局前先看看）</button></div>
+   ${firstRun?`<div style="border:1px solid #3fd0c0aa;background:linear-gradient(180deg,#0c2b30,#0a1d24);border-radius:10px;padding:10px 13px">
+     <div style="font-weight:800;color:#5fe3d0">👋 第一次玩 SETI？</div>
+     <div class="small muted" style="margin:3px 0 8px">剧情教程用一副固定牌手把手带你通关第一局——边玩边学，10 分钟上手。</div>
+     <button class="opt gold" style="margin:0" onclick="startStoryTutorial()">🎬 开始剧情教程（零基础推荐）</button>
+   </div>`:''}
+   <button class="opt primary" style="margin:0;padding:13px" onclick="newGame(classicOpts())"><span style="font-size:15px;font-weight:800">🎮 开始游戏</span><br><span class="small" style="opacity:.85">经典模式 · ${setSummary} · 5 回合</span></button>
+   <button class="opt gold" style="margin:0" onclick="orgPickScreen()">🏢 组织模式<span class="small muted" style="margin-left:6px">2 人 · 非对称组织能力 · 4 回合</span></button>
+   </div>
+   <div style="margin-top:11px;border:1px solid #24406e;border-radius:10px;overflow:hidden">
+     <button style="display:flex;width:100%;justify-content:space-between;align-items:center;background:#0d1a33;border:none;border-radius:0;padding:9px 13px;cursor:pointer" onclick="toggleSetPanel()" aria-expanded="${_setOpen}">
+       <span style="font-weight:800;color:var(--gold)">⚙️ 对局设置 <span style="display:inline-block;transition:transform .18s;transform:rotate(${_setOpen?90:0}deg)">▸</span></span>
+       <span class="small muted">${setSummary}</span>
+     </button>
+     ${_setOpen?`<div style="padding:2px 13px 12px">${setBody}</div>`:''}
+   </div>
+   <div style="margin-top:11px;display:flex;gap:7px;flex-wrap:wrap">
+     ${firstRun?'':'<button class="small" style="flex:1;min-width:110px" onclick="startStoryTutorial()" title="手把手通关一局，零基础必玩">🎬 剧情教程</button>'}
+     <button class="small" style="flex:1;min-width:110px" onclick="spectateSetupScreen()" title="看 AI 像人一样对决，边看边学">🎙️ AI 解说观战</button>
+     <button class="small" style="flex:1;min-width:110px" onclick="startTutorial()" title="快速看一遍界面各区域">📖 界面速览</button>
+     <button class="small" style="flex:1;min-width:110px" onclick="showCardDex()" title="浏览全部 200 张卡牌">🗂 卡牌图鉴</button>
+   </div>
    ${statsSummaryHTML()}
    <div style="height:48px;margin:14px -22px -20px;border-radius:0 0 14px 14px;overflow:hidden;background:#0a1428 url('assets/scenes/footer.webp') center bottom/cover;opacity:.95"></div>`;
   $('modalbg').style.display='flex';
@@ -1286,7 +1307,9 @@ function youOrgActive(){
 /* ---------- 日志 ---------- */
 function logS(t){G.log.unshift({c:'lg-sys',t});if(G._replay)G._replay.push('· '+t);G._logN=(G._logN||0)+1;trimLog();}
 function logY(t){G.log.unshift({c:'lg-you',t});if(G._replay)G._replay.push('[你] '+t);G._logN=(G._logN||0)+1;trimLog();}
-function logA(t){G.log.unshift({c:'lg-ai',t});if(G._replay)G._replay.push('[AI] '+t);G._logN=(G._logN||0)+1;trimLog();}
+function logA(t){G.log.unshift({c:'lg-ai',t});if(G._replay)G._replay.push('[AI] '+t);G._logN=(G._logN||0)+1;trimLog();
+  // 直觉优化：记录 AI 的主行动，等轮到玩家时在行动区顶栏直接展示「对手刚做了什么」（免翻日志）
+  if(!(typeof SIM!=='undefined'&&SIM) && logKindOf(t)==='main'){ (G._aiRecent=G._aiRecent||[]).push(t); if(G._aiRecent.length>3)G._aiRecent.shift(); }}
 function trimLog(){if(G.log.length>160)G.log.length=160;renderLog();}
 
 /* ===========================================================
@@ -1905,7 +1928,9 @@ function resolveSector(secIdx){
   const tied=G.players.map((p,i)=>i).filter(i=>cnt[i]===max);
   let winner = tied.includes(G.active)? G.active : tied[tied.length-1];
   const wp=G.players[winner];
-  const reward= sec.firstWon? {trace:'win',vp:1} : {trace:'win',vp:3,data:1};
+  // 官方权威：每星专属的首胜/复胜奖励（定义在 SECTOR_DEFS，提取自官方在线版 sectorSetup）
+  const def=SECTOR_DEFS[sec.idx]||{};   // 防御：异常状态（如极旧存档）回退到当前定义
+  const reward= sec.firstWon? (sec.repeatWin||def.repeatWin||{vp:3}) : (sec.firstWin||def.firstWin||{trace:'win'});
   sec.firstWon=true;
   wp.sectorWins++;
   if(wp.sectorWinsByColor && sec.color) wp.sectorWinsByColor[sec.color]=(wp.sectorWinsByColor[sec.color]||0)+1;   // 按颜色统计胜扇区（供「观测」类任务卡判定）
@@ -1915,7 +1940,7 @@ function resolveSector(secIdx){
   if(hasPassive(wp,'winPub')){ gain(wp,{publicity:2,vp:1},true); } // 组织被动：胜扇区+2公关+1分
   alienToken(wp,'sectorWin');   // 半人马：每赢扇区集1段信息
   sec.wins.push(winner);
-  logS('扇区 '+sec.name+' 完成！胜者：'+pname(winner)+'（红·胜利痕迹）。');
+  logS('扇区 '+sec.name+' 完成！胜者：'+pname(winner)+'（'+secRewardText(reward)+'）。');
   // 重置扇区：第二名（其次最多标记者，非胜者）留 1 标记于首位
   let second=null, smax=-1;
   G.players.forEach((p,i)=>{ if(i!==winner && cnt[i]>smax && cnt[i]>0){ smax=cnt[i]; second=i; } });
@@ -2167,8 +2192,12 @@ function applyComputerSlot(p,s){
 
 function exchangePrompt(){
   const p=G.players[0];
-  modalChoose('资源兑换：2 个同种 → 1 个任意（自由行动）',[
-    {label:'2信用 → ?',v:'credits'},{label:'2能量 → ?',v:'energy'},{label:'2卡牌 → ?',v:'card'},
+  // 直觉优化：把「够不够」直接标在选项上（现有量 + 不足置灰说明），而不是选完才报错
+  const mk=(label,v,have,need,unit)=>({label:label+`　<span class="small ${have>=need?'muted':''}" style="${have<need?'color:#e88':''}">（现有 ${have}${have<need?' · 不足':''}）</span>`,v});
+  modalChoose('资源兑换：2 个同种 → 1 个任意（自由行动，可多次）',[
+    mk('2信用 → ?','credits',p.credits,2),
+    mk('2能量 → ?','energy',p.energy,2),
+    mk('2卡牌 → ?','card',p.hand.length,2),
   ],kind=>{
     if(kind==='credits'&&p.credits<2)return toast('信用不足');
     if(kind==='energy'&&p.energy<2)return toast('能量不足');
@@ -2176,11 +2205,23 @@ function exchangePrompt(){
     modalChoose('换成什么？',[
       {label:'1信用',v:'credits'},{label:'1能量',v:'energy'},{label:'1卡牌',v:'card'}
     ],to=>{
-      if(kind==='credits')p.credits-=2; else if(kind==='energy')p.energy-=2; else {p.hand.splice(0,2).forEach(c=>G.discard.push(c));}
-      if(to==='credits')p.credits+=1; else if(to==='energy')p.energy+=1; else drawCard(p);
-      logY('兑换资源。'); renderAll();
-    });
-  });
+      const finish=()=>{
+        if(to==='credits')p.credits+=1; else if(to==='energy')p.energy+=1; else drawCard(p);
+        logY('兑换资源。'); renderAll();
+      };
+      if(kind==='credits'){ p.credits-=2; finish(); }
+      else if(kind==='energy'){ p.energy-=2; finish(); }
+      else {
+        // 让玩家自己选弃哪 2 张（原实现静默弃掉前 2 张——违反直觉）
+        const pickOne=(step,cont)=>{
+          modalChoose(`选择要弃掉的第 ${step}/2 张卡`,
+            p.hand.map((c,i)=>({v:i,c,sub:'弃掉这张'})), i=>cont(i), {cards:true});
+        };
+        pickOne(1, i1=>{ const c1=p.hand.splice(i1,1)[0]; G.discard.push(c1);
+          pickOne(2, i2=>{ const c2=p.hand.splice(i2,1)[0]; G.discard.push(c2); finish(); }); });
+      }
+    },{cancelLabel:'返回（不兑换）'});
+  },{cancelLabel:'返回（不兑换）'});
 }
 function buyCardFree(){
   const p=G.players[0];
@@ -2350,6 +2391,7 @@ function awardGold(p){
    =========================================================== */
 function endMain(){
   // 主行动结束 → 处理里程碑/发现 → 结算待放置痕迹&待拿卡（人类交互）→ 下一玩家
+  G._aiRecent=[];   // 你已行动 → 清空「对手刚做了什么」提示，下轮重新累计
   resolveMilestones();
   G.players[0].pendingMoves=0; // 简化：移动点不跨回合保留（除被动）
   renderAll();
@@ -2383,7 +2425,14 @@ function allPassed(){return G.players.every(p=>p.passed);}
 function actPass(){
   if(!canAct())return;
   if(G._tut){ doPass(G.players[0]); return; }   // 教程不弹确认
-  modalChoose('确定跳过本回合？（之后将弃到 4 张手牌并领取回合结束奖励，无法撤销）',
+  // 具体化确认信息：让玩家在点下去之前就知道会发生什么（弃几张、是否触发旋转）
+  const p=G.players[0];
+  const counted=p.hand.filter(c=>!handLimitFree(p,c)).length, over=Math.max(0,counted-4);
+  const bits=[];
+  bits.push(over>0?`手牌 ${counted} 张 → 需弃 ${over} 张（保留 4 张）`:'手牌不超限，无需弃牌');
+  if(!G.firstPassed) bits.push(`⚠️ 你是本回合<b>第一个跳过</b>的玩家 → 立即触发太阳系旋转（${DISC_NAME[G.rotation]}），盘上探测器会被带动`);
+  bits.push('之后本回合不能再行动，回合结束自动领取收入');
+  modalChoose('确定跳过本回合？<div class="small" style="font-weight:400;line-height:1.7;margin-top:6px;text-align:left">· '+bits.join('<br>· ')+'</div>',
     [{label:'⏭ 确定跳过',v:1}], ()=>doPass(G.players[0]),
     {cancelLabel:'返回（我还要行动）'});
 }
@@ -2446,6 +2495,8 @@ function endRoundCardChoice(p,done){
 function endRound(){
   G._noUI=1;   // 回合间收入结算：人类卡牌即时入手，不弹明牌选择（下个 scheduleTurn 解除）
   logS('—— 第 '+G.round+' 回合结束 ——');
+  // 逐回合分数快照（终局折线图用；无下划线前缀→随存档保留，续局曲线不断）
+  if(!SIM) (G.roundScores=G.roundScores||[]).push({r:'R'+G.round, s:G.players.map(p=>p.vp)});
   if(G.round>=G.maxRound){ endGame(); return; }
   // 回合间收入
   for(const p of G.players){
@@ -2497,6 +2548,8 @@ function endGame(){
     if(top.length===1){ const loser=top[0]; const pen=Math.floor(loser.vp/10); loser.finalDanger=-pen; loser.vp-=pen;
       logS('埃克塞尔危险值结算：'+pname(loser.idx)+'危险值最高（'+maxD+'），终局扣 '+pen+' 分。'); }
   }
+  // 终局加成后的最终分数快照（折线图最后一个点）
+  if(!SIM) (G.roundScores=G.roundScores||[]).push({r:'终', s:G.players.map(p=>p.vp)});
   renderAll();
   showFinal();
 }
@@ -3483,7 +3536,7 @@ function setPhaseYou(){
 }
 
 /* ===== 存档 / 读档 / 悔棋：对纯数据 G 做 JSON 快照（与 rollout 同一克隆机制） ===== */
-const SAVE_KEY='seti_save_v1';
+const SAVE_KEY='seti_save_v2';   // v2：扇区改官方权威容量/奖励（v1 旧档扇区结构不兼容，不再提供续局）
 function _noUnderscore(k,v){ return (k && k.charAt(0)==='_')?undefined:v; }   // 跳过 _ 开头的瞬态/动画/快照字段
 function snapState(){ try{ return JSON.stringify(G,_noUnderscore); }catch(e){ return null; } }
 function saveGame(){
@@ -4068,6 +4121,21 @@ function techInfo(id){
   if(tech)toast(tech.name+'：'+(tech.desc||fxText(tech.imm)));
 }
 
+// 扇区奖励的可读文本（官方每星不同：痕迹/分数组合）
+function secRewardText(r){
+  const a=[];
+  if(r.trace)a.push('红·胜利痕迹');
+  if(r.vp)a.push('+'+r.vp+'分');
+  if(r.data)a.push('+'+r.data+'数据');
+  return a.join(' + ')||'—';
+}
+function secRewardHTML(r){
+  const a=[];
+  if(r.trace)a.push('<span style="color:var(--r)">红痕迹</span>');
+  if(r.vp)a.push('<span style="color:var(--vp)">+'+r.vp+'分</span>');
+  if(r.data)a.push('+'+r.data+'数据');
+  return a.join('+')||'—';
+}
 function renderSectors(){
   let h='';
   G.sectors.forEach((s,i)=>{
@@ -4077,11 +4145,12 @@ function renderSectors(){
       slots+=`<span class="slot" style="background:${c};border-color:${j<s.size?'var(--line)':'#553'}"></span>`;
     });
     const winners=s.wins.map(w=>pname(w)).join('、');
-    h+=`<div class="sector" title="扫描标记信号→拿数据；标记最多者赢得扇区，得红色胜利痕迹（首胜+3分+1数据，之后+1分）。第2位标记+2分。"><div class="row" style="justify-content:space-between">
+    const fw=s.firstWin||SECTOR_DEFS[i].firstWin, rw=s.repeatWin||SECTOR_DEFS[i].repeatWin;
+    h+=`<div class="sector" title="扫描标记信号→得1数据（放到第2槽额外+2分）；扇区填满时标记最多者获胜（首胜：${secRewardText(fw)}；之后：${secRewardText(rw)}）。参与者各+1公关，完成后第2名保留1个标记。"><div class="row" style="justify-content:space-between">
       <b>${s.name} <span class="scolL" style="background:var(--${s.color})" title="${COLORNAME[s.color]}色">${COLORNAME[s.color]}</span></b>
       <span class="small muted">容量${s.size}${winners?' · 胜:'+winners:''}</span></div>
       <div style="margin-top:4px">${slots}</div>
-      <div class="small muted" style="margin-top:2px">胜：<span style="color:var(--r)">红痕迹</span> ${s.firstWon?'<span style="color:var(--vp)">+1分</span>':'<span style="color:var(--gold)">首胜+3分+1数据</span>'} · 第2位+2分</div></div>`;
+      <div class="small muted" style="margin-top:2px">胜：${s.firstWon?secRewardHTML(rw):('<span style="color:var(--gold)">首胜</span> '+secRewardHTML(fw))} · 第2槽+2分</div></div>`;
   });
   $('sectors').innerHTML=h;
 }
@@ -4311,7 +4380,8 @@ function renderActions(){
   const banner = dis
     ? (p.passed ? '<div class="turnbar passed">✓ 你已跳过本回合 · 等待其他玩家结束</div>'
        : '<div class="turnbar wait">⏳ '+((G.players[G.active]&&G.players[G.active].isAI)?pname(G.active)+' 思考中…':'请稍候…')+'</div>')
-    : '<div class="turnbar you">🟢 你的回合 · 选 1 个<b>主行动</b>（绿框=现在可做；自由行动不限次）</div>';
+    : '<div class="turnbar you">🟢 你的回合 · 选 1 个<b>主行动</b>（绿框=现在可做；自由行动不限次）</div>'
+      +((G._aiRecent&&G._aiRecent.length)?`<div class="small" style="grid-column:1/-1;color:#9fb4d6;background:#101d38;border:1px solid #24406e;border-radius:7px;padding:4px 9px;margin-bottom:3px">🤖 ${G._aiRecent.join('　')}</div>`:'');
   $('actions').innerHTML=orgBar+banner+`
     <button class="act${gl('launch')}${cando('launch')}${cantdo('launch')}" data-act="launch" ${dz('launch')}${tt('launch')} onclick="actLaunch()">🚀 发射探测器<br><span class="small muted">2信用</span></button>
     <button class="act${gl('orbit')}${cando('orbit')}${cantdo('orbit')}" data-act="orbit" ${dz('orbit')}${tt('orbit')} onclick="actOrbit()">🛰 环绕<br><span class="small muted">1信用+1能量</span></button>
@@ -4498,6 +4568,30 @@ function toast(msg){
 /* ===========================================================
    终局 / 帮助 弹窗
    =========================================================== */
+// 终局「逐回合分数走势」折线图（借鉴官方在线版 GameEnd 的 round-score chart：640×220、3档网格、玩家色折线+点）
+function roundTrendHTML(){
+  const hist=G.roundScores||[];
+  if(hist.length<2) return '';
+  const ps=G.players;
+  const W=640,H=210,L=46,Rm=18,T=14,B=32;
+  const all=[]; hist.forEach(h=>h.s.forEach(v=>all.push(v)));
+  const mx=Math.max(1,Math.max.apply(null,all)), mn=Math.min(0,Math.min.apply(null,all)), d=Math.max(1,mx-mn);
+  const X=i=>hist.length<=1?L+(W-L-Rm)/2:L+(W-L-Rm)*i/(hist.length-1);
+  const Y=v=>T+(mx-v)/d*(H-T-B);
+  const grid=[0,.5,1].map(f=>{const v=Math.round(mx-d*f),y=T+(H-T-B)*f;
+    return `<line x1="${L}" y1="${y}" x2="${W-Rm}" y2="${y}" stroke="rgba(90,120,170,.28)"/><text x="${L-9}" y="${y+4}" text-anchor="end" style="font-family:var(--f-mono);font-size:10px" fill="#8fa3c8">${v}</text>`;}).join('');
+  const lines=ps.map(p=>{const col=pcolor(p.idx);
+    const pts=hist.map((h,i)=>`${X(i).toFixed(1)},${Y(h.s[p.idx]||0).toFixed(1)}`).join(' ');
+    const dots=hist.map((h,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(h.s[p.idx]||0).toFixed(1)}" r="4" fill="${col}" stroke="#0a1021" stroke-width="1.5"/>`).join('');
+    return `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`+dots;}).join('');
+  const xlab=hist.map((h,i)=>`<text x="${X(i).toFixed(1)}" y="${H-12}" text-anchor="middle" style="font-family:var(--f-mono);font-size:10px" fill="#8fa3c8">${h.r}</text>`).join('');
+  const legend=ps.map(p=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)"><span style="width:10px;height:10px;border-radius:50%;background:${pcolor(p.idx)};border:1px solid rgba(255,255,255,.35)"></span>${pname(p.idx)}</span>`).join('　');
+  return `<div style="margin:4px 0 12px;background:rgba(8,16,34,.55);border:1px solid var(--line);border-radius:9px;padding:8px 10px">
+    <div style="font-size:9.5px;letter-spacing:.18em;color:var(--muted);margin-bottom:2px">逐 回 合 分 数 走 势</div>
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto" role="img" aria-label="逐回合分数走势">
+      <line x1="${L}" y1="${H-B}" x2="${W-Rm}" y2="${H-B}" stroke="rgba(120,150,200,.4)"/>${grid}${lines}${xlab}</svg>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${legend}</div></div>`;
+}
 function showFinal(){
   if(SIM)return;
   const ps=G.players;
@@ -4539,6 +4633,7 @@ function showFinal(){
      <div class="muted" style="font-size:12px;margin-top:3px">分差 ${Math.abs(ps[0].vp-(ps[1]?ps[1].vp:0))} 分</div>
    </div>
    <div style="margin:8px 0 14px">${ps.map(bar).join('')}</div>
+   ${roundTrendHTML()}
    <table class="score"><tr><th>计分来源</th>${ps.map(p=>`<th style="color:${pcolor(p.idx)};${winBg(p)}">${isWin(p)?'👑 ':''}${pname(p.idx)}</th>`).join('')}</tr>
      ${prow('对局累计得分',base)}
      ${prow('金板倍率',p=>p.finalGold||0)}
@@ -4740,8 +4835,8 @@ const TUT_STEPS=[
    instruction:'点高亮的【📡 扫描】，在弹窗里给任意星系标记一个信号。',
    gate:G=>G.sectors.some(s=>s.slot&&s.slot.includes(0)) || G.players[0].sectorWins>=1},
   {id:'r2-win', title:'赢下一个扇区（红痕迹）', round:2, only:'card:27', target:{kind:'hand',match:c=>c.n===27},
-   onEnter:G=>{ tutEnsure({credits:1}); tutGiveCard(27); const sec=G.sectors[6]; if(sec){ sec.slot=[0,null]; sec.firstWon=false; } },   // 保证 PLATO 在手 + 预置“室女座61”差1格且你领先 → 必赢下它
-   concept:{key:'sectorwin', title:'🏆 赢得扇区 = 红色痕迹', html:'闪光的【PLATO】一次标记 <b>3 个黄色信号</b>，把<b>室女座61</b>扇区填满 → 你<b>赢下该扇区</b>，拿到 <span style="color:#ef5b6b">红色胜利痕迹（+5 分）</span>，离发现外星人又近一步！'},
+   onEnter:G=>{ tutEnsure({credits:1}); tutGiveCard(27); const sec=G.sectors[6]; if(sec){ sec.slot=new Array(sec.size).fill(0); sec.slot[sec.size-1]=null; sec.firstWon=false; } },   // 保证 PLATO 在手 + 预置“室女座61”差1格且你领先 → 任意1个黄信号落进去即赢（容量自适应官方数值，3信号可自选扇区所以留容错）
+   concept:{key:'sectorwin', title:'🏆 赢得扇区 = 红色痕迹', html:'闪光的【PLATO】一次标记 <b>3 个黄色信号</b>——<b>室女座61</b>只差 1 格，把它补满 → 你<b>赢下该扇区</b>，拿到 <span style="color:#ef5b6b">红色胜利痕迹</span>，离发现外星人又近一步！'},
    instruction:'点闪光的【PLATO】→「作为主行动打出」，赢下扇区拿红色痕迹。',
    gate:G=>G.players[0].sectorWins>=1 || G.players[0].traces.win>=1},
   {id:'r2-pass', title:'跳过，结束第2回合', round:2, only:'pass', target:{kind:'action',act:'pass'},
