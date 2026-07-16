@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SETI · 搜寻地外文明 — 单人对战 AI</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
@@ -35,7 +35,7 @@
       url('assets/ui/table.jpg') center/cover fixed, var(--bg);
   }
   h1,h2,h3{margin:0 0 6px;font-family:var(--f-display)}
-  #app{display:grid;grid-template-columns:304px 1fr 326px;gap:11px;padding:11px;min-height:100vh;align-items:start}
+  #app{display:grid;grid-template-columns:304px 1fr 326px;gap:11px;padding:11px;min-height:100vh;min-height:100svh;align-items:start}   /* svh：移动浏览器工具栏收合时不超高 */
   .panel{background:var(--panel);border:1px solid #34557f;border-radius:13px;padding:10px 13px;margin-bottom:11px;
     box-shadow:0 8px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(140,185,255,.14), inset 0 -1px 0 rgba(0,0,0,.34)}  /* metal hairline (rounded-corner recipe) */
   .panel h3{font-size:12.5px;letter-spacing:1.2px;color:var(--gold);text-transform:uppercase;font-family:var(--f-display);
@@ -62,6 +62,8 @@
   button.act.cando:not(:disabled){border-color:#46e08a;box-shadow:0 0 11px rgba(70,224,138,.28);background:linear-gradient(180deg,#1c5060,#10303a)}
   button.act.cantdo{opacity:.4;cursor:help}
   button.act.cantdo:hover:not(:disabled){opacity:.62;border-color:#7a3a32;box-shadow:none;transform:none}
+  button.small.cantdo{opacity:.42;cursor:help}
+  button{touch-action:manipulation}   /* 移动端：消除双击缩放判定延迟/误缩放 */
   .turnbar{grid-column:1/-1;text-align:center;font-weight:800;font-size:12.5px;border-radius:8px;padding:5px 6px;margin-bottom:3px;letter-spacing:.3px}
   .turnbar.you{background:linear-gradient(90deg,#0d3a2a,#114a33);color:#6fe7b0;border:1px solid #2e6b4d;animation:turnGlow 2.4s ease-in-out infinite}
   @keyframes turnGlow{0%,100%{box-shadow:0 0 9px rgba(70,224,138,.16)}50%{box-shadow:0 0 19px rgba(70,224,138,.40)}}
@@ -260,7 +262,7 @@
   /* ===== 移动端 / 触屏自适应 ===== */
   @media (max-width: 880px){
     html,body{font-size:13.5px}
-    #app{grid-template-columns:1fr; gap:8px; padding:7px; padding-bottom:8px}
+    #app{grid-template-columns:1fr; gap:8px; padding:7px; padding-bottom:calc(8px + env(safe-area-inset-bottom))}   /* 刘海屏安全区 */
     #center{order:-1}                                   /* 棋盘置顶，便于操作 */
     #center > .panel:first-child{flex-wrap:wrap; gap:6px; justify-content:flex-start}
     #center > .panel:first-child .row{width:100%; justify-content:flex-start}
@@ -275,6 +277,10 @@
     .handRow{flex:none}
     #modal{max-width:94vw; padding:16px 15px; max-height:90vh}
     #tutBox{max-width:86vw}
+    /* 触控目标下限（WCAG 2.5.5 / Apple HIG ≥44px；密集面板放宽到 40px） */
+    button{min-height:40px}
+    #actions button.act{min-height:48px}
+    #modal button,#actions button.small{min-height:42px}
   }
   @media (max-width: 560px){
     html,body{font-size:13px}
@@ -1185,6 +1191,17 @@ function setOppDiff(k,d){ _selOpps[k].rivalDiff=d; startScreen(); }
 function setExpansion(v){ _selExpansion=v; startScreen(); }
 function setHeptapods(v){ _selHeptapods=v; startScreen(); }
 function classicOpts(){ return {mode:'classic', opponents:_selOpps.slice(0,_selNumP-1).map(o=>({aiMode:o.aiMode,rivalDiff:o.rivalDiff})), expansion:_selExpansion}; }
+// 防误触：还有未结束的对局时，从开始界面开新局需二次确认（研究共识：不可逆操作不应离良性操作一步之遥）
+function guardStart(kind){
+  const go=()=>{ if(kind==='org')orgPickScreen(); else if(kind==='story')startStoryTutorial(); else newGame(classicOpts()); };
+  const live= typeof G!=='undefined' && G && G.players && !G.over && !G.spectate && !G._tut && G.round>=1;
+  if(!live){ go(); return; }
+  $('modal').innerHTML=`<h2>⚠️ 当前对局尚未结束</h2>
+    <div class="small muted" style="margin-bottom:10px">第 ${G.round}/${G.maxRound} 回合 · 你 ${G.players[0].vp} 分 vs ${G.players.slice(1).map(x=>x.vp).join('/')} 分。开新局会放弃并覆盖它。</div>
+    <div style="display:flex;gap:8px"><button class="opt primary" style="flex:1" onclick="closeModal();startScreen()">▶ 返回，不放弃</button>
+    <button class="opt" style="flex:1" onclick="closeModal();(${kind==='org'?'orgPickScreen':kind==='story'?'startStoryTutorial':'(()=>newGame(classicOpts()))'})()">🗑 放弃当前对局，开新局</button></div>`;
+  $('modalbg').style.display='flex';
+}
 function startScreen(){
   const m=$('modal');
   const pcSel=`<div style="margin:12px 0 4px;color:var(--gold);font-weight:800;letter-spacing:.5px">👥 玩家人数（2-4 人）</div>
@@ -1231,10 +1248,10 @@ function startScreen(){
    ${firstRun?`<div style="border:1px solid #3fd0c0aa;background:linear-gradient(180deg,#0c2b30,#0a1d24);border-radius:10px;padding:10px 13px">
      <div style="font-weight:800;color:#5fe3d0">👋 第一次玩 SETI？</div>
      <div class="small muted" style="margin:3px 0 8px">剧情教程用一副固定牌手把手带你通关第一局——边玩边学，10 分钟上手。</div>
-     <button class="opt gold" style="margin:0" onclick="startStoryTutorial()">🎬 开始剧情教程（零基础推荐）</button>
+     <button class="opt gold" style="margin:0" onclick="guardStart('story')">🎬 开始剧情教程（零基础推荐）</button>
    </div>`:''}
-   <button class="opt primary" style="margin:0;padding:13px" onclick="newGame(classicOpts())"><span style="font-size:15px;font-weight:800">🎮 开始游戏</span><br><span class="small" style="opacity:.85">经典模式 · ${setSummary} · 5 回合</span></button>
-   <button class="opt gold" style="margin:0" onclick="orgPickScreen()">🏢 组织模式<span class="small muted" style="margin-left:6px">2 人 · 非对称组织能力 · 4 回合</span></button>
+   <button class="opt primary" style="margin:0;padding:13px" onclick="guardStart('classic')"><span style="font-size:15px;font-weight:800">🎮 开始游戏</span><br><span class="small" style="opacity:.85">经典模式 · ${setSummary} · 5 回合</span></button>
+   <button class="opt gold" style="margin:0" onclick="guardStart('org')">🏢 组织模式<span class="small muted" style="margin-left:6px">2 人 · 非对称组织能力 · 4 回合</span></button>
    </div>
    <div style="margin-top:11px;border:1px solid #24406e;border-radius:10px;overflow:hidden">
      <button style="display:flex;width:100%;justify-content:space-between;align-items:center;background:#0d1a33;border:none;border-radius:0;padding:9px 13px;cursor:pointer" onclick="toggleSetPanel()" aria-expanded="${_setOpen}">
@@ -1244,7 +1261,7 @@ function startScreen(){
      ${_setOpen?`<div style="padding:2px 13px 12px">${setBody}</div>`:''}
    </div>
    <div style="margin-top:11px;display:flex;gap:7px;flex-wrap:wrap">
-     ${firstRun?'':'<button class="small" style="flex:1;min-width:110px" onclick="startStoryTutorial()" title="手把手通关一局，零基础必玩">🎬 剧情教程</button>'}
+     ${firstRun?'':`<button class="small" style="flex:1;min-width:110px" onclick="guardStart('story')" title="手把手通关一局，零基础必玩">🎬 剧情教程</button>`}
      <button class="small" style="flex:1;min-width:110px" onclick="spectateSetupScreen()" title="看 AI 像人一样对决，边看边学">🎙️ AI 解说观战</button>
      <button class="small" style="flex:1;min-width:110px" onclick="startTutorial()" title="快速看一遍界面各区域">📖 界面速览</button>
      <button class="small" style="flex:1;min-width:110px" onclick="showCardDex()" title="浏览全部 200 张卡牌">🗂 卡牌图鉴</button>
@@ -3532,8 +3549,21 @@ function setPhaseYou(){
   G._undoSnap=snapState();   // 本回合开始处快照（用于「悔棋」）
   saveGame();                // 自动存档（在你的回合边界，状态稳定）
   renderAll();
+  notifyYourTurn();          // 切到别的标签页时：闪烁标题提醒「该你了」
   if(G && G._tut) tutTick();   // 剧情教程：AI 回合结束、控制权回到你时刷新引导
 }
+// 玩家切走标签页期间轮到自己 → 闪烁 document.title；切回即恢复
+let _titleFlash=null;
+const _BASE_TITLE=document.title;
+function notifyYourTurn(){
+  if(!document.hidden||_titleFlash)return;
+  let on=false;
+  _titleFlash=setInterval(()=>{
+    if(!G||G.over||G.active!==0){ clearInterval(_titleFlash); _titleFlash=null; document.title=_BASE_TITLE; return; }   // 不再是你的回合→自动停
+    document.title=(on=!on)?'🟢 该你了 — SETI':_BASE_TITLE;
+  },900);
+}
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&_titleFlash){ clearInterval(_titleFlash); _titleFlash=null; document.title=_BASE_TITLE; } });
 
 /* ===== 存档 / 读档 / 悔棋：对纯数据 G 做 JSON 快照（与 rollout 同一克隆机制） ===== */
 const SAVE_KEY='seti_save_v2';   // v2：扇区改官方权威容量/奖励（v1 旧档扇区结构不兼容，不再提供续局）
@@ -4354,6 +4384,35 @@ function actInfo(p,onPlanet,landB){
   I.pass={ok:true,why:''};
   return I;
 }
+// 💡 AI 教练提示：卡住的新手的「逃生口」——按启发式 AI 的直觉排序推荐一步。
+// 只读局面、零副作用（不能直接调 aiChooseMain：其尾部 aiTryAdvance 会真的移动探测器）。
+function showHintMove(){
+  if(!canAct())return;
+  const p=G.players[0];
+  let probeOnPlanet=null;
+  p.probes.forEach(pr=>{ if(pr.ring>=0){ const b=ringBody(pr.ring,pr.pos); if(isPlanet(b)) probeOnPlanet=b; } });
+  const probeInSpace=p.probes.some(pr=>pr.ring>=0);
+  let bestCard=null,bestV=0;
+  p.hand.forEach(c=>{ if(p.credits>=c.cost){ const v=aiCardValue(p,c); if(v>bestV){bestV=v;bestCard=c;} } });
+  const cand=[];
+  if(computerTopFull(p)&&p.energy>=analyzeCost(p)) cand.push(['💾 分析数据','电脑顶行已填满——分析可清空电脑并标下<b>蓝·分析痕迹</b>，这是当前性价比最高的一步。']);
+  if(probeOnPlanet&&p.energy>=landCost(p,probeOnPlanet)) cand.push(['🪂 着陆 '+PLANETS[probeOnPlanet].name,'你的探测器已停在行星上：着陆奖励丰厚，还会留下<b>黄·登陆痕迹</b>（先点选那个探测器）。']);
+  if(probeOnPlanet&&p.credits>=1&&p.energy>=1) cand.push(['🛰 环绕 '+PLANETS[probeOnPlanet].name,'探测器就位：环绕拿轨道奖励，抢首环加成（先点选那个探测器）。']);
+  if(p.credits>=1&&p.energy>=2) cand.push(['📡 扫描','标记信号→立得数据，还能推进扇区争夺（标记最多者赢扇区拿<b>红·胜利痕迹</b>）。']);
+  if(p.publicity>=researchCost(p)&&availTechs(p).length>0) cand.push(['🔬 研究科技','公关已攒够：科技是长线加速器，研究还会旋转太阳系。']);
+  if(bestCard) cand.push(['🃏 打出『'+bestCard.name+'』','这是你手里当前价值最高、又付得起的一张牌。']);
+  if(p.probes.length<p.probeLimit&&p.credits>=2) cand.push(['🚀 发射探测器','把探测器送上天，是环绕/着陆的前置。']);
+  if(probeInSpace) cand.push(['🧭 移动探测器','点选你的探测器→点高亮相邻格，向行星靠近（每步 1 能量/移动点）。']);
+  cand.push(['⏭ 跳过','资源不足以做出有效行动时，跳过攒下回合收入更划算。']);
+  const top=cand.slice(0,3);
+  $('modal').innerHTML=`<h2>💡 AI 教练建议</h2>
+    <div class="small muted" style="margin-bottom:8px">按当前局面的直觉排序（与对局 AI 同源的估值逻辑），仅供参考——你的判断优先。</div>
+    ${top.map((c,i)=>`<div style="display:flex;gap:9px;align-items:flex-start;background:${i===0?'rgba(84,209,138,.08)':'rgba(8,16,34,.5)'};border:1px solid ${i===0?'var(--good)':'var(--line)'};border-radius:9px;padding:9px 11px;margin:6px 0">
+      <span style="font-size:16px;font-weight:900;color:${i===0?'var(--good)':'var(--muted)'}">${i+1}</span>
+      <div><b>${c[0]}</b><div class="small muted" style="margin-top:2px">${c[1]}</div></div></div>`).join('')}
+    <div style="margin-top:10px"><button class="opt primary" onclick="closeModal()">明白了</button></div>`;
+  $('modalbg').style.display='flex';
+}
 function renderActions(){
   const p=G.players[0];
   const dis= !canAct();
@@ -4380,7 +4439,7 @@ function renderActions(){
   const banner = dis
     ? (p.passed ? '<div class="turnbar passed">✓ 你已跳过本回合 · 等待其他玩家结束</div>'
        : '<div class="turnbar wait">⏳ '+((G.players[G.active]&&G.players[G.active].isAI)?pname(G.active)+' 思考中…':'请稍候…')+'</div>')
-    : '<div class="turnbar you">🟢 你的回合 · 选 1 个<b>主行动</b>（绿框=现在可做；自由行动不限次）</div>'
+    : '<div class="turnbar you" style="display:flex;align-items:center;gap:8px"><span style="flex:1">🟢 你的回合 · 选 1 个<b>主行动</b>（绿框=现在可做；自由行动不限次）</span>'+(G._tut?'':'<button class="small" style="margin:0;white-space:nowrap" onclick="showHintMove()" title="AI 教练分析当前局面，推荐一步（仅供参考）">💡 提示</button>')+'</div>'
       +((G._aiRecent&&G._aiRecent.length)?`<div class="small" style="grid-column:1/-1;color:#9fb4d6;background:#101d38;border:1px solid #24406e;border-radius:7px;padding:4px 9px;margin-bottom:3px">🤖 ${G._aiRecent.join('　')}</div>`:'');
   $('actions').innerHTML=orgBar+banner+`
     <button class="act${gl('launch')}${cando('launch')}${cantdo('launch')}" data-act="launch" ${dz('launch')}${tt('launch')} onclick="actLaunch()">🚀 发射探测器<br><span class="small muted">2信用</span></button>
@@ -4394,12 +4453,18 @@ function renderActions(){
     <button class="act" data-act="plutoOrbit" ${dis||!canPlutoOrbit(p)?'disabled':''} onclick="actOrbitPluto()" title="冥王星促销：最外环有探测器即可环绕（每人限1次）">🌑 环绕冥王星<br><span class="small muted">1信用+1能量${p.pluto&&p.pluto.orb?' ✓已环绕':''}</span></button>
     <button class="act" data-act="plutoLand" ${dis||!canPlutoLand(p)?'disabled':''} onclick="actLandPluto()" title="冥王星促销：最外环有探测器即可着陆（每人限1次）">🌑 着陆冥王星<br><span class="small muted">${plutoLandCost(p)}能量${p.pluto&&p.pluto.land?' ✓已着陆':''}</span></button>`:''}
     <button class="act primary${gl('pass')}" data-act="pass" ${dis?'disabled':''} ${lk('pass')} onclick="actPass()">⏭ 跳过(结束回合)</button>
-    <button class="small" data-free="placeData" ${dis||p.data<=0?'disabled':''} ${lk('placeData')} onclick="placeDataFree()">放置数据(自由)</button>
-    <button class="small" ${dis?'disabled':''} ${lk('exchange')} onclick="exchangePrompt()">兑换(自由)</button>
-    <button class="small" data-free="buyCard" ${dis||p.publicity<3?'disabled':''} ${lk('buyCard')} onclick="buyCardFree()">买卡 3公关(自由)</button>
-    <button class="small" ${dis||p.hand.length===0?'disabled':''} ${lk('discard')} onclick="discardForCorner()">弃牌取角标(自由)</button>
-    <button class="small" ${dis||p.missions.length===0?'disabled':''} ${lk('mission')} onclick="youCompleteMissions()">完成任务(自由)</button>
-    <button class="small" data-free="tuck" ${dis||p.hand.length===0?'disabled':''} ${lk('tuck')} onclick="promptTuck(G.players[0],true)">塞收入(自由)</button>
+    ${(()=>{ // 自由行动与主行动同一套语言：不可用=变暗+悬停原因+点击 toast（真正禁用仅在非你回合/教程锁）
+      const fbtn=(label,lockKey,onclickStr,cond,why,dataAttr)=>{
+        const cant=!dis&&cond;
+        return `<button class="small${cant?' cantdo':''}"${dataAttr?` data-free="${dataAttr}"`:''} ${dis?'disabled':''} ${lk(lockKey)}${cant?` title="${why}"`:''} onclick="${onclickStr}">${label}</button>`;
+      };
+      return fbtn('放置数据(自由)','placeData','placeDataFree()',p.data<=0,'数据池为空——扫描/分析可获得数据','placeData')
+        +fbtn('兑换(自由)','exchange','exchangePrompt()',false,'')
+        +fbtn('买卡 3公关(自由)','buyCard','buyCardFree()',p.publicity<3,`公关不足（需 3，现 ${p.publicity}）`,'buyCard')
+        +fbtn('弃牌取角标(自由)','discard','discardForCorner()',p.hand.length===0,'手牌为空')
+        +fbtn('完成任务(自由)','mission','youCompleteMissions()',p.missions.length===0,'尚无打出的任务卡')
+        +fbtn('塞收入(自由)','tuck','promptTuck(G.players[0],true)',p.hand.length===0,'手牌为空','tuck');
+    })()}
   `;
 }
 // 4-bucket log classifier (borrowed from the official build): actor color (who) + kind left-rail/indent/badge (what) + running ordinal
@@ -4514,7 +4579,8 @@ function _modalCancel(){
   if(oc)oc();
   if(!G.over) renderAll();
 }
-function closeModal(){ $('modalbg').style.display='none'; _modalCb=null; }
+function closeModal(){ $('modalbg').style.display='none'; _modalCb=null;
+  setTimeout(()=>{ if($('modalbg').style.display==='none') $('modal').innerHTML=''; },250); }   // 延迟清残留（仅在仍关闭时清，不影响立即重开的流程）
 function toggleMoreMenu(e){ if(e&&e.stopPropagation)e.stopPropagation(); const m=$('moreMenu'); if(m) m.style.display = (m.style.display==='none'||!m.style.display)?'flex':'none'; }
 function closeMoreMenu(){ const m=$('moreMenu'); if(m) m.style.display='none'; }
 // 移动端：一键在「棋盘/行动」和「手牌」之间跳转
